@@ -1,0 +1,36 @@
+name: Build zsign
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      OPENSSL_VERSION: 1.1.1w
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git
+        wget https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz
+        tar -xzf openssl-${OPENSSL_VERSION}.tar.gz && cd openssl-${OPENSSL_VERSION}
+        ./config && make -j$(nproc) --silent
+        sudo make install && sudo ldconfig
+        openssl version
+
+    - name: Build zsign
+      run: |
+        sudo chmod +x INSTALL.sh
+        sudo ./INSTALL.sh
+
+    - name: Upload buildinfo
+      uses: actions/upload-artifact@v3
+      with:
+        name: zsign
+        path: build/
