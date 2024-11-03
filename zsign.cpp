@@ -193,21 +193,23 @@ int main(int argc, char *argv[]) {
 
   bool bEnableCache = true;
   string strFolder = strPath;
-  if (bZipFile) { // ipa file
+  // 使用 7z 替代 unzip 进行解压
+if (bZipFile) { // ipa file
     bForce = true;
     bEnableCache = false;
     StringFormat(strFolder, "/tmp/zsign_folder_%llu", timer.Reset());
     ZLog::PrintV(">>> Unzip:\t%s (%s) -> %s ... \n", strPath.c_str(),
                  GetFileSizeString(strPath.c_str()).c_str(), strFolder.c_str());
     RemoveFolder(strFolder.c_str());
-    if (!SystemExec("unzip -qq -d '%s' '%s'", strFolder.c_str(),
-                    strPath.c_str())) {
-      RemoveFolder(strFolder.c_str());
-      ZLog::ErrorV(">>> Unzip Failed!\n");
-      return -1;
+    // 使用 7z 解压
+    if (!SystemExec("7z x -o'%s' '%s' -y", strFolder.c_str(), strPath.c_str())) {
+        RemoveFolder(strFolder.c_str());
+        ZLog::ErrorV(">>> Unzip Failed!\n");
+        return -1;
     }
     timer.PrintResult(true, ">>> Unzip OK!");
-  }
+}
+
 
   timer.Reset();
   ZAppBundle bundle;
@@ -220,33 +222,36 @@ int main(int argc, char *argv[]) {
     StringFormat(strOutputFile, "/tmp/zsign_temp_%llu.ipa", GetMicroSecond());
   }
 
-  if (!strOutputFile.empty()) {
-    timer.Reset();
-    size_t pos = bundle.m_strAppFolder.rfind("/Payload");
-    if (string::npos == pos) {
-      ZLog::Error(">>> Can't Find Payload Directory!\n");
-      return -1;
+  // 修改压缩部分的代码以使用 7z 压缩工具
+    if (!strOutputFile.empty()) {
+        timer.Reset();
+        size_t pos = bundle.m_strAppFolder.rfind("/Payload");
+        if (string::npos == pos) {
+            ZLog::Error(">>> Can't Find Payload Directory!\n");
+            return -1;
+        }
+    
+        ZLog::PrintV(">>> Archiving: \t%s ... \n", strOutputFile.c_str());
+        string strBaseFolder = bundle.m_strAppFolder.substr(0, pos);
+        char szOldFolder[PATH_MAX] = {0};
+        if (NULL != getcwd(szOldFolder, PATH_MAX)) {
+            if (0 == chdir(strBaseFolder.c_str())) {
+                uZipLevel = uZipLevel > 9 ? 9 : uZipLevel;
+                RemoveFile(strOutputFile.c_str());
+    
+                // 使用 7z 替代 zip 进行压缩
+                SystemExec("7z a -tzip -mx=%u '%s' Payload", uZipLevel, strOutputFile.c_str());
+                
+                chdir(szOldFolder);
+                if (!IsFileExists(strOutputFile.c_str())) {
+                    ZLog::Error(">>> Archive Failed!\n");
+                    return -1;
+                }
+            }
+        }
+        timer.PrintResult(true, ">>> Archive OK! (%s)", GetFileSizeString(strOutputFile.c_str()).c_str());
     }
 
-    ZLog::PrintV(">>> Archiving: \t%s ... \n", strOutputFile.c_str());
-    string strBaseFolder = bundle.m_strAppFolder.substr(0, pos);
-    char szOldFolder[PATH_MAX] = {0};
-    if (NULL != getcwd(szOldFolder, PATH_MAX)) {
-      if (0 == chdir(strBaseFolder.c_str())) {
-        uZipLevel = uZipLevel > 9 ? 9 : uZipLevel;
-        RemoveFile(strOutputFile.c_str());
-        SystemExec("zip -q -%u -r '%s' Payload", uZipLevel,
-                   strOutputFile.c_str());
-        chdir(szOldFolder);
-        if (!IsFileExists(strOutputFile.c_str())) {
-          ZLog::Error(">>> Archive Failed!\n");
-          return -1;
-        }
-      }
-    }
-    timer.PrintResult(true, ">>> Archive OK! (%s)",
-                      GetFileSizeString(strOutputFile.c_str()).c_str());
-  }
 
   if (bRet && bInstall) {
     SystemExec("ideviceinstaller -i '%s'", strOutputFile.c_str());
