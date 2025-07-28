@@ -31,7 +31,8 @@ int zsign(
 	NSString *displayname,
 	NSString *bundleversion,
 	bool adhoc,
-	bool dontGenerateEmbeddedMobileProvision
+	bool dontGenerateEmbeddedMobileProvision,
+	void(^completionHandler)(BOOL success, NSError *error)
 );
 
 int checkCert(

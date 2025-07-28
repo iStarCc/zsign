@@ -10,6 +10,7 @@ ZBundle::ZBundle()
 	m_pSignAsset = NULL;
 	m_bForceSign = false;
 	m_bWeakInject = false;
+	signFailedFiles = "";
 }
 
 bool ZBundle::FindAppFolder(const string& strFolder, string& strAppFolder)
@@ -268,10 +269,14 @@ bool ZBundle::SignNode(jvalue& jvNode)
 			ZMachO macho;
 			if (macho.InitV("%s/%s", m_strAppFolder.c_str(), strFile.c_str())) {
 				if (!macho.Sign(m_pSignAsset, m_bForceSign, "", "", "", "")) {
-					return false;
+					signFailedFiles += strFile;
+					signFailedFiles += "\n";
+//					return false;
 				}
 			} else {
-				return false;
+				signFailedFiles += strFile;
+				signFailedFiles += "\n";
+//				return false;
 			}
 		}
 	}
@@ -315,7 +320,10 @@ bool ZBundle::SignNode(jvalue& jvNode)
 	ZMachO macho;
 	if (!macho.Init(strExePath.c_str())) {
 		ZLog::ErrorV(">>> Can't parse BundleExecute file! %s\n", strExePath.c_str());
-		return false;
+		signFailedFiles += strExePath;
+		signFailedFiles += "\n";
+//		return false;
+		return true;
 	}
 
 	ZFile::CreateFolderV("%s/_CodeSignature", strBaseFolder.c_str());

@@ -44,4 +44,5 @@ private:
 
 public:
 	string			m_strAppFolder;
+	string signFailedFiles;
 };
