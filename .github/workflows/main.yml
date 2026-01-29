@@ -1,0 +1,60 @@
+name: Sync Fork from Zsign-Package to iStarCc/zsign
+
+on:
+  # 定时执行：每天 UTC 时间 00:00 执行（北京时间 08:00）
+  schedule:
+    - cron: '0 0 * * *'
+  
+  # 允许手动触发
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检查环境
+        run: |
+          echo "开始同步任务..."
+          echo "源仓库: https://github.com/khcrysalis/Zsign-Package.git (package 分支)"
+          echo "目标仓库: git@github.com:iStarCc/zsign.git (swift 分支)"
+      
+      - name: 配置 Git
+        run: |
+          git config --global user.name "GitHub Action Bot"
+          git config --global user.email "action@github.com"
+      
+      - name: 设置 SSH 密钥
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+      
+      - name: 克隆源仓库
+        run: |
+          git clone --branch package --single-branch https://github.com/khcrysalis/Zsign-Package.git source-repo
+          cd source-repo
+          echo "最新 commit 信息："
+          git log -1 --oneline
+      
+      - name: 推送到目标仓库
+        run: |
+          cd source-repo
+          git remote add target git@github.com:iStarCc/zsign.git
+          
+          # 获取目标仓库的 swift 分支（如果存在）
+          git fetch target swift || echo "目标分支不存在，将创建新分支"
+          
+          # 推送到目标仓库的 swift 分支，保留所有 commit 历史
+          git push target package:swift --force
+          
+          echo "同步完成！"
+      
+      - name: 显示同步结果
+        run: |
+          cd source-repo
+          echo "已同步的最新 commit："
+          git log -3 --oneline
