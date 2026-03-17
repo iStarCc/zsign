@@ -1,4 +1,5 @@
 #include "common.h"
+#include "log_keys.h"
 #include "json.h"
 #include "mach-o.h"
 #include "openssl.h"
@@ -73,17 +74,17 @@ bool ZMachO::OpenFile(const char* szPath)
 				uint8_t* pArchBase = m_pBase + ((FAT_MAGIC == magic) ? pFatArch->offset : LE(pFatArch->offset));
 				uint32_t uArchLength = (FAT_MAGIC == magic) ? pFatArch->size : LE(pFatArch->size);
 				if (!NewArchO(pArchBase, uArchLength)) {
-					ZLog::ErrorV(">>> Invalid arch file in fat mach-o file!\n");
+					ZLog::Error(ZL10n::GetFmt(ZL10nKeys::INVALID_ARCH_IN_FAT));
 					return false;
 				}
 			}
 		} else if (MH_MAGIC == magic || MH_CIGAM == magic || MH_MAGIC_64 == magic || MH_CIGAM_64 == magic) {
 			if (!NewArchO(m_pBase, (uint32_t)m_sSize)) {
-				ZLog::ErrorV(">>> Invalid mach-o file!\n");
+				ZLog::Error(ZL10n::GetFmt(ZL10nKeys::INVALID_MACHO_FILE));
 				return false;
 			}
 		} else {
-			ZLog::ErrorV(">>> Invalid mach-o file (magic: 0x%08x)!\n", magic);
+			ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::INVALID_MACHO_MAGIC), magic);
 			return false;
 		}
 	}
@@ -98,7 +99,7 @@ bool ZMachO::CloseFile()
 	}
 
 	if (!ZFile::UnmapFile((void*)m_pBase, m_sSize)) {
-		ZLog::ErrorV(">>> CodeSign write(munmap) failed! Error: %p, %lu, %s\n", m_pBase, m_sSize, strerror(errno));
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_MUNMAP_FAILED), m_pBase, m_sSize, strerror(errno));
 		return false;
 	}
 	return true;
@@ -163,7 +164,7 @@ bool ZMachO::Sign(ZSignAsset* pSignAsset, bool bForce, string strBundleId, strin
 
 bool ZMachO::ReallocCodeSignSpace()
 {
-	ZLog::Warn(">>> Realloc CodeSignature space... \n");
+	ZLog::Warn(ZL10n::GetFmt(ZL10nKeys::REALLOC_CODESIGN_SPACE));
 
 	vector<uint32_t> arrMachOesSizes;
 	for (size_t i = 0; i < m_arrArchOes.size(); i++) {
@@ -171,12 +172,12 @@ bool ZMachO::ReallocCodeSignSpace()
 		ZUtil::StringFormatV(strNewArchOFile, "%s.archo.%d", m_strFile.c_str(), i);
 		uint32_t uNewLength = m_arrArchOes[i]->ReallocCodeSignSpace(strNewArchOFile);
 		if (uNewLength <= 0) {
-			ZLog::Error(">>> Failed!\n");
+			ZLog::Error(ZL10n::GetFmt(ZL10nKeys::REALLOC_CODESIGN_SPACE_FAILED));
 			return false;
 		}
 		arrMachOesSizes.push_back(uNewLength);
 	}
-	ZLog::Warn(">>> Success!\n");
+	ZLog::Warn(ZL10n::GetFmt(ZL10nKeys::REALLOC_CODESIGN_SPACE_SUCCESS));
 
 	if (1 == m_arrArchOes.size()) {
 		CloseFile();
@@ -254,21 +255,22 @@ bool ZMachO::ReallocCodeSignSpace()
 		}
 	}
 
+	ZLog::Error(ZL10n::GetFmt(ZL10nKeys::REALLOC_CODESIGN_SPACE_FAILED));
 	return false;
 }
 
 bool ZMachO::InjectDylib(bool bWeakInject, const char* szDylibFile)
 {
-	ZLog::WarnV(">>> InjectDylib: %s %s... \n", szDylibFile, bWeakInject ? "(weak)" : "");
+	ZLog::WarnV(ZL10n::GetFmt(ZL10nKeys::INJECT_DYLIB), szDylibFile, bWeakInject ? ZL10n::Get(ZL10nKeys::INJECT_WEAK) : "");
 
 	vector<uint32_t> arrMachOesSizes;
 	for (size_t i = 0; i < m_arrArchOes.size(); i++) {
 		if (!m_arrArchOes[i]->InjectDylib(bWeakInject, szDylibFile)) {
-			ZLog::Error(">>> Failed!\n");
+			ZLog::Error(ZL10n::GetFmt(ZL10nKeys::FAILED));
 			return false;
 		}
 	}
-	ZLog::Warn(">>> Success!\n");
+	ZLog::Warn(ZL10n::GetFmt(ZL10nKeys::SUCCESS));
 	return true;
 }
 
@@ -277,4 +279,18 @@ void ZMachO::RemoveDylibs(const set<string>& setDylibs)
 	for (size_t i = 0; i < m_arrArchOes.size(); i++) {
 		m_arrArchOes[i]->RemoveDylibs(setDylibs);
 	}
+}
+
+vector<string> ZMachO::ListDylibs()
+{
+	vector<string> result;
+	for (size_t i = 0; i < m_arrArchOes.size(); i++) {
+		vector<string> archDylibs = m_arrArchOes[i]->ListDylibs();
+		for (const string& d : archDylibs) {
+			if (find(result.begin(), result.end(), d) == result.end()) {
+				result.push_back(d);
+			}
+		}
+	}
+	return result;
 }

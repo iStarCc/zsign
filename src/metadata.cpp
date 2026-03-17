@@ -1,4 +1,5 @@
 #include "metadata.h"
+#include "log_keys.h"
 #include "json.h"
 #include "sha.h"
 #include "fs.h"
@@ -70,7 +71,7 @@ bool GetMetadata(const string& strAppFolder, const string& strOutputDir, const s
 	string strInfoPlistData;
 	string strInfoPlistPath = strAppFolder + "/Info.plist";
 	if (!ZFile::ReadFile(strInfoPlistPath.c_str(), strInfoPlistData)) {
-		return ZLog::ErrorV(">>> GetMetadata: Can't read %s\n", strInfoPlistPath.c_str());
+		return ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::GETMETADATA_CANT_READ), strInfoPlistPath.c_str());
 	}
 
 	jvalue jvInfo;
@@ -121,9 +122,9 @@ bool GetMetadata(const string& strAppFolder, const string& strOutputDir, const s
 
 	string strMetaPath = strOutputDir + "/metadata.json";
 	if (!jvMeta.style_write_to_file("%s", strMetaPath.c_str())) {
-		return ZLog::ErrorV(">>> GetMetadata: Can't write %s\n", strMetaPath.c_str());
+		return ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::GETMETADATA_CANT_WRITE), strMetaPath.c_str());
 	}
 
-	ZLog::PrintV(">>> Metadata:\t%s\n", strMetaPath.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::METADATA_PATH), strMetaPath.c_str());
 	return true;
 }

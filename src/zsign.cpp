@@ -1,4 +1,5 @@
 #include "common.h"
+#include "log_keys.h"
 #include <list>
 #include "macho.h"
 #include "bundle.h"
@@ -7,6 +8,7 @@
 #include "archive.h"
 #include "metadata.h"
 #include "certcheck.h"
+#include "json.h"
 
 #ifdef _WIN32
 #include "common_win32.h"
@@ -51,6 +53,11 @@ const struct option options[] = {
 	{"rm_extensions", no_argument, NULL, 'E'},
 	{"rm_watch", no_argument, NULL, 'W'},
 	{"rm_uisd", no_argument, NULL, 'U'},
+	{"list_dylibs", no_argument, NULL, 'L'},
+	{"inject_only", no_argument, NULL, 'I'},
+	{"remove_only", no_argument, NULL, 'J'},
+	{"no_remove_files", no_argument, NULL, 256},
+	{"locale", required_argument, NULL, 'y'},
 	{"help", no_argument, NULL, 'h'},
 	{}
 };
@@ -73,9 +80,9 @@ int usage()
 	ZLog::Print("-r, --bundle_version\tNew bundle version to change.\n");
 	ZLog::Print("-e, --entitlements\tNew entitlements to change.\n");
 	ZLog::Print("-z, --zip_level\t\tCompressed level when output the ipa file. (0-9)\n");
-	ZLog::Print("-l, --dylib\t\tPath to inject dylib file. Use -l multiple time to inject multiple dylib files at once.\n");
-	ZLog::Print("-D, --rm_dylib\t\tName of dylib to remove. Use -D multiple times to remove multiple dylibs at once.\n");
-	ZLog::Print("-w, --weak\t\tInject dylib as LC_LOAD_WEAK_DYLIB.\n");
+	ZLog::Print("-l, --dylib\t\tInject dylib. Format: -l \"install_path\" or -l \"install_path=source_path\" (= optional). Use -l multiple times.\n");
+	ZLog::Print("-D, --rm_dylib\t\tName or path of dylib to remove (e.g. OldLib.dylib or @rpath/OldLib.dylib). Use -D multiple times.\n");
+	ZLog::Print("-w, --weak\t\tInject dylib as LC_LOAD_WEAK_DYLIB (default when not adhoc).\n");
 	ZLog::Print("-i, --install\t\tInstall ipa file using ideviceinstaller command for test.\n");
 	ZLog::Print("-t, --temp_folder\tPath to temporary folder for intermediate files.\n");
 	ZLog::Print("-2, --sha256_only\tSerialize a single code directory that uses SHA256.\n");
@@ -88,10 +95,53 @@ int usage()
 	ZLog::Print("-E, --rm_extensions\tRemove all app extensions (PlugIns/Extensions).\n");
 	ZLog::Print("-W, --rm_watch\t\tRemove watch app from the bundle.\n");
 	ZLog::Print("-U, --rm_uisd\t\tRemove UISupportedDevices from Info.plist.\n");
+	ZLog::Print("-L, --list_dylibs\tList dylibs injected into the main executable.\n");
+	ZLog::Print("-I, --inject_only\tInject dylib only (no signing). Use -l \"install_path\" or -l \"install_path=source_path\".\n");
+	ZLog::Print("-J, --remove_only\tRemove dylib only (no signing). Use -D for dylib name or full path (e.g. @rpath/OldLib.dylib).\n");
+	ZLog::Print("    --no_remove_files\tWhen removing dylibs, only remove load commands, do not delete dylib files.\n");
+	ZLog::Print("-y, --locale\t\tLanguage: zh (简体中文) or en (English). Default: en\n");
 	ZLog::Print("-v, --version\t\tShows version.\n");
 	ZLog::Print("-h, --help\t\tShows help (this message).\n");
 
 	return -1;
+}
+
+static bool ResolveExecutablePath(const string& strPath, const string& strTempFolder, string& strExecPath, string* pStrFolderToClean = NULL)
+{
+	string strResolvePath = strPath;
+	if (ZFile::IsZipFile(strPath.c_str())) {
+		string strFolder = ZFile::GetRealPathV("%s/zsign_list_%llu", strTempFolder.c_str(), ZUtil::GetMicroSecond());
+		if (!ZFile::CreateFolder(strFolder.c_str())) return false;
+		if (pStrFolderToClean) *pStrFolderToClean = strFolder;
+		if (!Zip::Extract(strPath.c_str(), strFolder.c_str())) return false;
+		strResolvePath = strFolder;
+	}
+	if (ZFile::IsFolder(strResolvePath.c_str())) {
+		string strAppFolder;
+		if (ZFile::IsPathSuffix(strResolvePath, ".app") || ZFile::IsPathSuffix(strResolvePath, ".appex")) {
+			strAppFolder = strResolvePath;
+		} else {
+			ZFile::EnumFolder(strResolvePath.c_str(), true, [](bool, const string&) { return false; },
+				[&](bool bFolder, const string& strP) {
+					if (bFolder && (ZFile::IsPathSuffix(strP, ".app") || ZFile::IsPathSuffix(strP, ".appex"))) {
+						strAppFolder = strP;
+						return true;
+					}
+					return false;
+				});
+		}
+		if (strAppFolder.empty()) return false;
+		string strInfoData;
+		if (!ZFile::ReadFile((strAppFolder + "/Info.plist").c_str(), strInfoData)) return false;
+		jvalue jvInfo;
+		if (!jvInfo.read_plist(strInfoData)) return false;
+		string strExe = jvInfo["CFBundleExecutable"].as_cstr();
+		if (strExe.empty()) return false;
+		strExecPath = strAppFolder + "/" + strExe;
+		return ZFile::IsFileExists(strExecPath.c_str());
+	}
+	strExecPath = strResolvePath;
+	return true;
 }
 
 int main(int argc, char* argv[])
@@ -101,7 +151,7 @@ int main(int argc, char* argv[])
 
 	bool bForce = false;
 	bool bInstall = false;
-	bool bWeakInject = false;
+	bool bWeakInject = true;  // 默认 LC_LOAD_WEAK_DYLIB；-a (adhoc) 时改为 LC_LOAD_DYLIB
 	bool bAdhoc = false;
 	bool bSHA256Only = false;
 	bool bCheckSignature = false;
@@ -111,6 +161,7 @@ int main(int argc, char* argv[])
 	bool bRemoveExtensions = false;
 	bool bRemoveWatchApp = false;
 	bool bRemoveUISupportedDevices = false;
+	bool bListDylibs = false;
 	uint32_t uZipLevel = 0;
 
 	string strCertFile;
@@ -121,6 +172,7 @@ int main(int argc, char* argv[])
 	string strBundleId;
 	string strBundleVersion;
 	string strOutputFile;
+	string strOutputFileDisplay;  // 用户传入的原始路径，用于日志显示（避免输出绝对路径）
 	string strDisplayName;
 	string strEntitleFile;
 	vector<string> arrDylibFiles;
@@ -130,7 +182,10 @@ int main(int argc, char* argv[])
 
 	int opt = 0;
 	int argslot = -1;
-	while (-1 != (opt = getopt_long(argc, argv, "dfva2hiqwCRSc:k:m:o:p:e:b:n:z:l:D:t:r:x:M:E:W:U",
+	bool bInjectOnly = false;
+	bool bRemoveOnly = false;
+	bool bRemoveDylibFiles = true;
+	while (-1 != (opt = getopt_long(argc, argv, "dfva2hiqwCRSIJc:k:m:o:p:e:b:n:z:l:D:t:r:x:M:E:W:ULy:",
 		options, &argslot))) {
 		switch (opt) {
 		case 'd':
@@ -168,7 +223,13 @@ int main(int argc, char* argv[])
 			strEntitleFile = ZFile::GetFullPath(optarg);
 			break;
 		case 'l':
-			arrDylibFiles.push_back(ZFile::GetFullPath(optarg));
+			// 格式: "install_path" 或 "install_path=source_path"（仅支持 @executable_path/ 或 @rpath/）
+			if (optarg[0] == '@') {
+				arrDylibFiles.push_back(optarg);
+			} else {
+				ZLog::Error("zsign: -l 仅支持 @executable_path/ 或 @rpath/ 格式，如 -l \"@rpath/MyLib.dylib\" 或 -l \"@rpath/MyLib.dylib=/path/to/MyLib.dylib\"\n");
+				return -1;
+			}
 			break;
 		case 'D':
 			arrRemoveDylibNames.push_back(optarg);
@@ -178,6 +239,7 @@ int main(int argc, char* argv[])
 			break;
 		case 'o':
 			strOutputFile = ZFile::GetFullPath(optarg);
+			strOutputFileDisplay = optarg;
 			break;
 		case 'z':
 			uZipLevel = atoi(optarg);
@@ -214,6 +276,21 @@ int main(int argc, char* argv[])
 		case 'U':
 			bRemoveUISupportedDevices = true;
 			break;
+		case 'L':
+			bListDylibs = true;
+			break;
+		case 'I':
+			bInjectOnly = true;
+			break;
+		case 'J':
+			bRemoveOnly = true;
+			break;
+		case 256:
+			bRemoveDylibFiles = false;
+			break;
+		case 'y':
+			ZL10n::SetLocale(optarg);
+			break;
 		case 'v': {
 			printf("version: %s\n", ZSIGN_VERSION_STR);
 			return 0;
@@ -225,7 +302,7 @@ int main(int argc, char* argv[])
 			break;
 		}
 
-		ZLog::DebugV(">>> Option:\t-%c, %s\n", opt, optarg);
+		ZLog::DebugV(ZL10n::GetFmt(ZL10nKeys::DEBUG_OPTION), opt, optarg ? optarg : "");
 	}
 
 	if (optind >= argc) {
@@ -233,25 +310,25 @@ int main(int argc, char* argv[])
 	}
 
 	if (!ZFile::IsFolder(strTempFolder.c_str())) {
-		ZLog::ErrorV(">>> Invalid temp folder! %s\n", strTempFolder.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::INVALID_TEMP_FOLDER), strTempFolder.c_str());
 		return -1;
 	}
 
 	string strPath = ZFile::GetFullPath(argv[optind]);
 	if (!ZFile::IsFileExists(strPath.c_str())) {
-		ZLog::ErrorV(">>> Invalid path! %s\n", strPath.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::INVALID_PATH), strPath.c_str());
 		return -1;
 	}
 
 	if (uZipLevel < 0 || uZipLevel > 9) {
-		ZLog::ErrorV(">>> Invalid zip level! Please input 0 - 9.\n");
+		ZLog::Error(ZL10n::GetFmt(ZL10nKeys::INVALID_ZIP_LEVEL));
 		return -1;
 	}
 
 	if (ZLog::IsDebug()) {
 		ZFile::CreateFolder("./.zsign_debug");
 		for (int i = optind; i < argc; i++) {
-			ZLog::DebugV(">>> Argument:\t%s\n", argv[i]);
+			ZLog::DebugV(ZL10n::GetFmt(ZL10nKeys::DEBUG_ARGUMENT), argv[i]);
 		}
 	}
 
@@ -259,11 +336,200 @@ int main(int argc, char* argv[])
 		return CheckCertificate(strPath, strPassword);
 	}
 
+	// Standalone inject-only (参考 zsign-swift injectDyLib / injectDylibs)
+	if (bInjectOnly) {
+		if (arrDylibFiles.empty()) {
+			ZLog::Error("zsign: -I/--inject_only requires -l. Use -l \"@rpath/MyLib.dylib\" or -l \"@rpath/MyLib.dylib=/path/to/MyLib.dylib\".\n");
+			return -1;
+		}
+		bool bZipFile = ZFile::IsZipFile(strPath.c_str());
+		if (bZipFile && strOutputFile.empty()) {
+			ZLog::Error(ZL10n::GetFmt(ZL10nKeys::OUTPUT_PATH_REQUIRED));
+			return -1;
+		}
+		string strExecPath;
+		string strFolderToClean;
+		string strWorkFolder = strPath;
+		if (bZipFile) {
+			strWorkFolder = ZFile::GetRealPathV("%s/zsign_inject_%llu", strTempFolder.c_str(), ZUtil::GetMicroSecond());
+			if (!ZFile::CreateFolder(strWorkFolder.c_str())) return -1;
+			strFolderToClean = strWorkFolder;
+			if (!Zip::Extract(strPath.c_str(), strWorkFolder.c_str())) {
+				ZLog::Error(ZL10n::GetFmt(ZL10nKeys::UNZIP_FAILED));
+				ZFile::RemoveFolder(strWorkFolder.c_str());
+				return -1;
+			}
+		}
+		if (!ResolveExecutablePath(strWorkFolder, strTempFolder, strExecPath, NULL)) {
+			ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::FAILED_RESOLVE_EXEC_PATH), strPath.c_str());
+			if (!strFolderToClean.empty()) ZFile::RemoveFolder(strFolderToClean.c_str());
+			return -1;
+		}
+		// -a: LC_LOAD_DYLIB; -w: LC_LOAD_WEAK_DYLIB; -a 优先于 -w
+		bool bEffectiveWeakInject = bWeakInject && !bAdhoc;
+		string strAppFolder = strExecPath.substr(0, strExecPath.rfind('/'));
+		ZMachO macho;
+		if (!macho.Init(strExecPath.c_str())) {
+			ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::INVALID_MACHO_PATH), strExecPath.c_str());
+			if (!strFolderToClean.empty()) ZFile::RemoveFolder(strFolderToClean.c_str());
+			return -1;
+		}
+		const size_t lenExec = 17, lenRpath = 7;
+		for (const string& dyLibSpec : arrDylibFiles) {
+			string strLoadPath;
+			string strSourceFile;
+			size_t eqPos = dyLibSpec.find('=');
+			if (eqPos != string::npos && eqPos > 1) {
+				// 字典格式: install_path=source_path (与 zsign-swift injectDylibs 一致)
+				strLoadPath = dyLibSpec.substr(0, eqPos);
+				strSourceFile = ZFile::GetFullPath(dyLibSpec.substr(eqPos + 1).c_str());
+			} else {
+				strLoadPath = dyLibSpec;
+			}
+			if (!strSourceFile.empty()) {
+				string relPath;
+				if (strLoadPath.find("@executable_path/") == 0) {
+					relPath = strLoadPath.substr(lenExec);
+				} else if (strLoadPath.find("@rpath/") == 0) {
+					string afterRpath = strLoadPath.substr(lenRpath);
+					relPath = (afterRpath.find("Frameworks/") == 0) ? afterRpath : string("Frameworks/") + afterRpath;
+				}
+				if (!relPath.empty()) {
+					string strDestFile = strAppFolder + "/" + relPath;
+					size_t lastSlash = strDestFile.rfind('/');
+					if (lastSlash != string::npos && lastSlash > strAppFolder.size()) {
+						ZFile::CreateFolder(strDestFile.substr(0, lastSlash).c_str());
+					}
+					if (!ZFile::CopyFileV(strSourceFile.c_str(), "%s/%s", strAppFolder.c_str(), relPath.c_str())) {
+						ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::FAILED_COPY_APP), strSourceFile.c_str());
+						macho.Free();
+						if (!strFolderToClean.empty()) ZFile::RemoveFolder(strFolderToClean.c_str());
+						return -1;
+					}
+				}
+			}
+			if (!macho.InjectDylib(bEffectiveWeakInject, strLoadPath.c_str())) {
+				macho.Free();
+				if (!strFolderToClean.empty()) ZFile::RemoveFolder(strFolderToClean.c_str());
+				return -1;
+			}
+		}
+		macho.Free();
+		if (bZipFile) {
+			if (!Zip::Archive(strWorkFolder.c_str(), strOutputFile.c_str(), uZipLevel)) {
+				ZLog::Error(ZL10n::GetFmt(ZL10nKeys::ARCHIVE_FAILED));
+				ZFile::RemoveFolder(strFolderToClean.c_str());
+				return -1;
+			}
+			ZFile::RemoveFolder(strFolderToClean.c_str());
+		}
+		ZLog::Print(ZL10n::Get(ZL10nKeys::DONE));
+		return 0;
+	}
+
+	// Standalone remove-only (参考 zsign-swift removeDylibs)
+	if (bRemoveOnly) {
+		if (arrRemoveDylibNames.empty()) {
+			ZLog::Error("zsign: -J/--remove_only requires -D. Use -D \"@rpath/OldLib.dylib\" or -D OldLib.dylib.\n");
+			return -1;
+		}
+		bool bZipFile = ZFile::IsZipFile(strPath.c_str());
+		if (bZipFile && strOutputFile.empty()) {
+			ZLog::Error(ZL10n::GetFmt(ZL10nKeys::OUTPUT_PATH_REQUIRED));
+			return -1;
+		}
+		string strExecPath;
+		string strFolderToClean;
+		string strWorkFolder = strPath;
+		if (bZipFile) {
+			strWorkFolder = ZFile::GetRealPathV("%s/zsign_remove_%llu", strTempFolder.c_str(), ZUtil::GetMicroSecond());
+			if (!ZFile::CreateFolder(strWorkFolder.c_str())) return -1;
+			strFolderToClean = strWorkFolder;
+			if (!Zip::Extract(strPath.c_str(), strWorkFolder.c_str())) {
+				ZLog::Error(ZL10n::GetFmt(ZL10nKeys::UNZIP_FAILED));
+				ZFile::RemoveFolder(strWorkFolder.c_str());
+				return -1;
+			}
+		}
+		if (!ResolveExecutablePath(strWorkFolder, strTempFolder, strExecPath, NULL)) {
+			ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::FAILED_RESOLVE_EXEC_PATH), strPath.c_str());
+			if (!strFolderToClean.empty()) ZFile::RemoveFolder(strFolderToClean.c_str());
+			return -1;
+		}
+		string strAppFolder = strExecPath.substr(0, strExecPath.rfind('/'));
+		set<string> setRemoveDylibs;
+		for (const string& name : arrRemoveDylibNames) {
+			if (name[0] == '@') {
+				setRemoveDylibs.insert(name);
+			} else {
+				setRemoveDylibs.insert("@executable_path/" + name);
+			}
+		}
+		ZMachO macho;
+		if (!macho.Init(strExecPath.c_str())) {
+			ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::INVALID_MACHO_PATH), strExecPath.c_str());
+			if (!strFolderToClean.empty()) ZFile::RemoveFolder(strFolderToClean.c_str());
+			return -1;
+		}
+		macho.RemoveDylibs(setRemoveDylibs);
+		if (bRemoveDylibFiles) {
+			const size_t lenExec = 17, lenRpath = 7;
+			for (const string& name : setRemoveDylibs) {
+				string baseName;
+				if (name.find("@executable_path/") == 0) {
+					baseName = name.substr(lenExec);
+				} else if (name.find("@rpath/") == 0) {
+					string afterRpath = name.substr(lenRpath);
+					baseName = (afterRpath.find("Frameworks/") == 0) ? afterRpath : string("Frameworks/") + afterRpath;
+				} else {
+					continue;
+				}
+				if (!baseName.empty()) {
+					ZFile::RemoveFileV("%s/%s", strAppFolder.c_str(), baseName.c_str());
+				}
+			}
+		}
+		macho.Free();
+		if (bZipFile) {
+			if (!Zip::Archive(strWorkFolder.c_str(), strOutputFile.c_str(), uZipLevel)) {
+				ZLog::Error(ZL10n::GetFmt(ZL10nKeys::ARCHIVE_FAILED));
+				ZFile::RemoveFolder(strFolderToClean.c_str());
+				return -1;
+			}
+			ZFile::RemoveFolder(strFolderToClean.c_str());
+		}
+		ZLog::Print(ZL10n::Get(ZL10nKeys::DONE));
+		return 0;
+	}
+
+	if (bListDylibs) {
+		string strExecPath;
+		string strFolderToClean;
+		if (!ResolveExecutablePath(strPath, strTempFolder, strExecPath, &strFolderToClean)) {
+			ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::FAILED_RESOLVE_EXEC_PATH), strPath.c_str());
+			return -1;
+		}
+		ZMachO macho;
+		if (!macho.Init(strExecPath.c_str())) {
+			ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::INVALID_MACHO_PATH), strExecPath.c_str());
+			if (!strFolderToClean.empty()) ZFile::RemoveFolder(strFolderToClean.c_str());
+			return -1;
+		}
+		vector<string> dylibs = macho.ListDylibs();
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::DYLIBS_IN), strExecPath.c_str());
+		for (const string& d : dylibs) {
+			ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::DYLIB_LIST_ITEM), d.c_str());
+		}
+		macho.Free();
+		if (!strFolderToClean.empty()) ZFile::RemoveFolder(strFolderToClean.c_str());
+		return 0;
+	}
+
 	bool bZipFile = ZFile::IsZipFile(strPath.c_str());
 	if (!bZipFile && !ZFile::IsFolder(strPath.c_str())) { // macho file
 		ZMachO* macho = new ZMachO();
 		if (!macho->Init(strPath.c_str())) {
-			ZLog::ErrorV(">>> Invalid mach-o file! %s\n", strPath.c_str());
+			ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::INVALID_MACHO_PATH), strPath.c_str());
 			return -1;
 		}
 
@@ -278,20 +544,21 @@ int main(int argc, char* argv[])
 		}
 
 		if (!arrDylibFiles.empty()) {
+			bool bEffectiveWeakInject = bWeakInject && !bAdhoc;
 			for (const string& dyLibFile : arrDylibFiles) {
-				if (!macho->InjectDylib(bWeakInject, dyLibFile.c_str())) {
+				if (!macho->InjectDylib(bEffectiveWeakInject, dyLibFile.c_str())) {
 					return -1;
 				}
 			}
 		}
 
 		atimer.Reset();
-		ZLog::PrintV(">>> Signing:\t%s %s\n", strPath.c_str(), (bAdhoc ? " (Ad-hoc)" : ""));
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::SIGNING), strPath.c_str(), (bAdhoc ? ZL10n::Get(ZL10nKeys::ADHOC) : ""));
 		string strInfoSHA1;
 		string strInfoSHA256;
 		string strCodeResourcesData;
 		bool bRet = macho->Sign(&zsa, bForce, strBundleId, strInfoSHA1, strInfoSHA256, strCodeResourcesData);
-		atimer.PrintResult(bRet, ">>> Signed %s!", bRet ? "OK" : "Failed");
+		atimer.PrintResult(bRet, ZL10n::GetFmt(ZL10nKeys::SIGNED_FMT), bRet ? ZL10n::Get(ZL10nKeys::SIGNED_OK) : ZL10n::Get(ZL10nKeys::SIGNED_FAILED));
 		return bRet ? 0 : -1;
 	}
 
@@ -301,7 +568,7 @@ int main(int argc, char* argv[])
 			bTempOutputFile = true;
 			strOutputFile = ZFile::GetRealPathV("%s/zsign_temp_%llu.ipa", strTempFolder.c_str(), ZUtil::GetMicroSecond());
 		} else if (bZipFile) {
-			ZLog::ErrorV(">>> Use -o option to specify the output file.\n");
+			ZLog::Error(ZL10n::GetFmt(ZL10nKeys::OUTPUT_PATH_REQUIRED));
 			return -1;
 		}
 	}
@@ -321,12 +588,12 @@ int main(int argc, char* argv[])
 		bTempFolder = true;
 		bEnableCache = false;
 		strFolder = ZFile::GetRealPathV("%s/zsign_folder_%llu", strTempFolder.c_str(), atimer.Reset());
-		ZLog::PrintV(">>> Unzip:\t%s (%s) -> %s ... \n", strPath.c_str(), ZFile::GetFileSizeString(strPath.c_str()).c_str(), strFolder.c_str());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::UNZIP), strPath.c_str(), ZFile::GetFileSizeString(strPath.c_str()).c_str(), strFolder.c_str());
 		if (!Zip::Extract(strPath.c_str(), strFolder.c_str())) {
-			ZLog::ErrorV(">>> Unzip failed!\n");
+			ZLog::Error(ZL10n::GetFmt(ZL10nKeys::UNZIP_FAILED));
 			return -1;
 		}
-		atimer.PrintResult(true, ">>> Unzip OK!");
+		atimer.PrintResult(true, ZL10n::Get(ZL10nKeys::UNZIP_OK));
 	}
 
 	//sign
@@ -338,21 +605,24 @@ int main(int argc, char* argv[])
 	bundle.m_bRemoveWatchApp = bRemoveWatchApp;
 	bundle.m_bRemoveUISupportedDevices = bRemoveUISupportedDevices;
 
+	// -a: LC_LOAD_DYLIB; -w: LC_LOAD_WEAK_DYLIB; -a 优先于 -w
+	bool bEffectiveWeakInject = bWeakInject && !bAdhoc;
+
 	bool bRet;
 	if (arrProvFiles.size() > 1) {
 		list<ZSignAsset> zsaList;
 		for (const string& provFile : arrProvFiles) {
 			zsaList.push_back(ZSignAsset());
 			if (!zsaList.back().Init(strCertFile, strPKeyFile, provFile, strEntitleFile, strPassword, bAdhoc, bSHA256Only, false)) {
-				ZLog::ErrorV(">>> Failed to init provision: %s\n", provFile.c_str());
+				ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::FAILED_INIT_PROVISION), provFile.c_str());
 				zsaList.pop_back();
 			}
 		}
-		bRet = bundle.SignFolder(&zsaList, strFolder, strBundleId, strBundleVersion, strDisplayName, arrDylibFiles, arrRemoveDylibNames, bForce, bWeakInject, bEnableCache, bRemoveProvision);
+		bRet = bundle.SignFolder(&zsaList, strFolder, strBundleId, strBundleVersion, strDisplayName, arrDylibFiles, arrRemoveDylibNames, bForce, bEffectiveWeakInject, bEnableCache, bRemoveProvision, bRemoveDylibFiles);
 	} else {
-		bRet = bundle.SignFolder(&zsa, strFolder, strBundleId, strBundleVersion, strDisplayName, arrDylibFiles, arrRemoveDylibNames, bForce, bWeakInject, bEnableCache, bRemoveProvision);
+		bRet = bundle.SignFolder(&zsa, strFolder, strBundleId, strBundleVersion, strDisplayName, arrDylibFiles, arrRemoveDylibNames, bForce, bEffectiveWeakInject, bEnableCache, bRemoveProvision, bRemoveDylibFiles);
 	}
-	atimer.PrintResult(bRet, ">>> Signed %s!", bRet ? "OK" : "Failed");
+	atimer.PrintResult(bRet, ZL10n::GetFmt(ZL10nKeys::SIGNED_FMT), bRet ? ZL10n::Get(ZL10nKeys::SIGNED_OK) : ZL10n::Get(ZL10nKeys::SIGNED_FAILED));
 
 	// Post-sign certificate check
 	if (bRet && bCheckSignature && !bundle.m_strAppFolder.empty()) {
@@ -364,20 +634,23 @@ int main(int argc, char* argv[])
 		size_t pos = bundle.m_strAppFolder.rfind("Payload");
 		if (string::npos != pos && pos > 0) {
 			atimer.Reset();
-			ZLog::PrintV(">>> Archiving: \t%s ... \n", strOutputFile.c_str());
+			string strArchivePath = strOutputFileDisplay.empty() ? strOutputFile : strOutputFileDisplay;
+			size_t sep = strArchivePath.find_last_of("/\\");
+			string strArchiveName = (sep != string::npos && sep + 1 < strArchivePath.size()) ? strArchivePath.substr(sep + 1) : strArchivePath;
+			ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::ARCHIVING), strArchiveName.c_str());
 			string strBaseFolder = bundle.m_strAppFolder.substr(0, pos - 1);
 			if (!Zip::Archive(strBaseFolder.c_str(), strOutputFile.c_str(), uZipLevel)) {
-				ZLog::Error(">>> Archive failed!\n");
+				ZLog::Error(ZL10n::GetFmt(ZL10nKeys::ARCHIVE_FAILED));
 				bRet = false;
 			} else {
-				atimer.PrintResult(true, ">>> Archive OK! (%s)", ZFile::GetFileSizeString(strOutputFile.c_str()).c_str());
+				atimer.PrintResult(true, ZL10n::GetFmt(ZL10nKeys::ARCHIVE_OK), ZFile::GetFileSizeString(strOutputFile.c_str()).c_str());
 				if (bRet && !strMetadataDir.empty()) {
 					ZFile::CreateFolder(strMetadataDir.c_str());
 					GetMetadata(bundle.m_strAppFolder, strMetadataDir, strOutputFile);
 				}
 			}
 		} else {
-			ZLog::Error(">>> Can't find payload directory!\n");
+			ZLog::Error(ZL10n::GetFmt(ZL10nKeys::CANT_FIND_PAYLOAD));
 			bRet = false;
 		}
 	}
@@ -396,6 +669,6 @@ int main(int argc, char* argv[])
 		ZFile::RemoveFile(strOutputFile.c_str());
 	}
 
-	gtimer.Print(">>> Done.");
+	gtimer.Print(ZL10n::Get(ZL10nKeys::DONE));
 	return bRet ? 0 : -1;
 }

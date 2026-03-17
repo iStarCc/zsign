@@ -1,4 +1,5 @@
 #include "common.h"
+#include "log_keys.h"
 #include "json.h"
 #include "archo.h"
 #include "signing.h"
@@ -234,11 +235,11 @@ bool ZArchO::IsExecute()
 bool ZArchO::IsSigned() const 
 {
 	if (NULL == m_pSignBase || m_uSignLength <= 0) {
-		ZLog::PrintV("File is not signed.\n");
+		ZLog::Print(ZL10n::GetFmt(ZL10nKeys::FILE_NOT_SIGNED));
 		return false;
 	}
 	
-	ZLog::PrintV("File is signed.\n");
+	ZLog::Print(ZL10n::GetFmt(ZL10nKeys::FILE_SIGNED));
 	return true;
 }
 
@@ -248,41 +249,41 @@ void ZArchO::PrintInfo()
 		return;
 	}
 
-	ZLog::Print("------------------------------------------------------------------\n");
-	ZLog::Print(">>> MachO Info: \n");
-	ZLog::PrintV("\tFileType: \t%s\n", GetFileType(BO(m_pHeader->filetype)));
-	ZLog::PrintV("\tTotalSize: \t%u (%s)\n", m_uLength, ZUtil::FormatSize(m_uLength).c_str());
-	ZLog::PrintV("\tPlatform: \t%u\n", m_b64Bit ? 64 : 32);
-	ZLog::PrintV("\tCPUArch: \t%s\n", GetArch(BO(m_pHeader->cputype), BO(m_pHeader->cpusubtype)));
-	ZLog::PrintV("\tCPUType: \t0x%x\n", BO(m_pHeader->cputype));
-	ZLog::PrintV("\tCPUSubType: \t0x%x\n", BO(m_pHeader->cpusubtype));
-	ZLog::PrintV("\tBigEndian: \t%d\n", m_bBigEndian);
-	ZLog::PrintV("\tEncrypted: \t%d\n", m_bEncrypted);
-	ZLog::PrintV("\tCommandCount: \t%d\n", BO(m_pHeader->ncmds));
-	ZLog::PrintV("\tCodeLength: \t%d (%s)\n", m_uCodeLength, ZUtil::FormatSize(m_uCodeLength).c_str());
-	ZLog::PrintV("\tSignLength: \t%d (%s)\n", m_uSignLength, ZUtil::FormatSize(m_uSignLength).c_str());
-	ZLog::PrintV("\tSpareLength: \t%d (%s)\n", m_uLength - m_uCodeLength - m_uSignLength, ZUtil::FormatSize(m_uLength - m_uCodeLength - m_uSignLength).c_str());
+	ZLog::Print(ZL10n::Get(ZL10nKeys::MACHO_SEPARATOR));
+	ZLog::Print(ZL10n::GetFmt(ZL10nKeys::MACHO_INFO));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_FILETYPE), GetFileType(BO(m_pHeader->filetype)));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_TOTALSIZE), m_uLength, ZUtil::FormatSize(m_uLength).c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_PLATFORM), m_b64Bit ? 64 : 32);
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_CPUARCH), GetArch(BO(m_pHeader->cputype), BO(m_pHeader->cpusubtype)));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_CPUTYPE), BO(m_pHeader->cputype));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_CPUSUBTYPE), BO(m_pHeader->cpusubtype));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_BIGENDIAN), m_bBigEndian);
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_ENCRYPTED), m_bEncrypted);
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_CMDCOUNT), BO(m_pHeader->ncmds));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_CODELENGTH), m_uCodeLength, ZUtil::FormatSize(m_uCodeLength).c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_SIGNLENGTH), m_uSignLength, ZUtil::FormatSize(m_uSignLength).c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_SPARELENGTH), m_uLength - m_uCodeLength - m_uSignLength, ZUtil::FormatSize(m_uLength - m_uCodeLength - m_uSignLength).c_str());
 
 	uint8_t* pLoadCommand = m_pBase + m_uHeaderSize;
 	for (uint32_t i = 0; i < BO(m_pHeader->ncmds); i++) {
 		load_command* plc = (load_command*)pLoadCommand;
 		if (LC_VERSION_MIN_IPHONEOS == BO(plc->cmd)) {
-			ZLog::PrintV("\tMIN_IPHONEOS: \t0x%x\n", *((uint32_t*)(pLoadCommand + sizeof(load_command))));
+			ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_MIN_IPHONEOS), *((uint32_t*)(pLoadCommand + sizeof(load_command))));
 		} else if (LC_RPATH == BO(plc->cmd)) {
-			ZLog::PrintV("\tLC_RPATH: \t%s\n", (char*)(pLoadCommand + sizeof(load_command) + 4));
+			ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_LC_RPATH), (char*)(pLoadCommand + sizeof(load_command) + 4));
 		}
 		pLoadCommand += BO(plc->cmdsize);
 	}
 
 	bool bHasWeakDylib = false;
-	ZLog::PrintV("\tLC_LOAD_DYLIB: \n");
+	ZLog::Print(ZL10n::Get(ZL10nKeys::MACHO_LC_LOAD_DYLIB));
 	pLoadCommand = m_pBase + m_uHeaderSize;
 	for (uint32_t i = 0; i < BO(m_pHeader->ncmds); i++) {
 		load_command* plc = (load_command*)pLoadCommand;
 		if (LC_LOAD_DYLIB == BO(plc->cmd)) {
 			dylib_command* dlc = (dylib_command*)pLoadCommand;
 			const char* szDylib = (const char*)(pLoadCommand + BO(dlc->dylib.name.offset));
-			ZLog::PrintV("\t\t\t%s\n", szDylib);
+			ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_DYLIB_ITEM), szDylib);
 		} else if (LC_LOAD_WEAK_DYLIB == BO(plc->cmd)) {
 			bHasWeakDylib = true;
 		}
@@ -290,38 +291,38 @@ void ZArchO::PrintInfo()
 	}
 
 	if (bHasWeakDylib) {
-		ZLog::PrintV("\tLC_LOAD_WEAK_DYLIB: \n");
+		ZLog::Print(ZL10n::Get(ZL10nKeys::MACHO_LC_LOAD_WEAK_DYLIB));
 		pLoadCommand = m_pBase + m_uHeaderSize;
 		for (uint32_t i = 0; i < BO(m_pHeader->ncmds); i++) {
 			load_command* plc = (load_command*)pLoadCommand;
 			if (LC_LOAD_WEAK_DYLIB == BO(plc->cmd)) {
 				dylib_command* dlc = (dylib_command*)pLoadCommand;
 				const char* szDylib = (const char*)(pLoadCommand + BO(dlc->dylib.name.offset));
-				ZLog::PrintV("\t\t\t%s (weak)\n", szDylib);
+				ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_DYLIB_WEAK_ITEM), szDylib);
 			}
 			pLoadCommand += BO(plc->cmdsize);
 		}
 	}
 
 	if (!m_strInfoPlist.empty()) {
-		ZLog::Print("\n>>> Embedded Info.plist: \n");
-		ZLog::PrintV("\tlength: \t%lu\n", m_strInfoPlist.size());
+		ZLog::Print(ZL10n::GetFmt(ZL10nKeys::EMBEDDED_INFO_PLIST));
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_PLIST_LENGTH), m_strInfoPlist.size());
 
 		string strInfoPlist = m_strInfoPlist;
 		ZUtil::StringReplace(strInfoPlist, "\n", "\n\t\t\t");
-		ZLog::PrintV("\tcontent: \t%s\n", strInfoPlist.c_str());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_PLIST_CONTENT), strInfoPlist.c_str());
 
 		ZSHA::PrintData1("\tSHA-1:  \t", m_strInfoPlist);
 		ZSHA::PrintData256("\tSHA-256:\t", m_strInfoPlist);
 	}
 
 	if (NULL == m_pSignBase || m_uSignLength <= 0) {
-		ZLog::Warn(">>> Can't find CodeSignature segment!\n");
+		ZLog::Warn(ZL10n::GetFmt(ZL10nKeys::CANT_FIND_CODESIGN_SEGMENT));
 	} else {
 		ZSign::ParseCodeSignature(m_pSignBase);
 	}
 
-	ZLog::Print("------------------------------------------------------------------\n");
+	ZLog::Print(ZL10n::Get(ZL10nKeys::MACHO_SEPARATOR));
 }
 
 bool ZArchO::BuildCodeSignature(ZSignAsset* pSignAsset, 
@@ -549,7 +550,7 @@ bool ZArchO::Sign(ZSignAsset* pSignAsset,
 {
 	if (NULL == m_pSignBase) {
 		m_bEnoughSpace = false;
-		ZLog::Warn(">>> Can't find CodeSignature segment!\n");
+		ZLog::Warn(ZL10n::GetFmt(ZL10nKeys::CANT_FIND_CODESIGN_SEGMENT));
 		return false;
 	}
 
@@ -565,14 +566,14 @@ bool ZArchO::Sign(ZSignAsset* pSignAsset,
 	string strCodeSignBlob;
 	BuildCodeSignature(pSignAsset, bForce, strBundleId, strInfoSHA1, strInfoSHA256, strCodeResourcesSHA1, strCodeResourcesSHA256, strCodeSignBlob);
 	if (strCodeSignBlob.empty()) {
-		ZLog::Error(">>> Build CodeSignature failed!\n");
+		ZLog::Error(ZL10n::GetFmt(ZL10nKeys::BUILD_CODESIGN_FAILED));
 		return false;
 	}
 
 	int nSpaceLength = (int)m_uLength - (int)m_uCodeLength - (int)strCodeSignBlob.size();
 	if (nSpaceLength < 0) {
 		m_bEnoughSpace = false;
-		ZLog::WarnV(">>> No enough CodeSignature space (now: %d, need: %d).\n", (int)m_uLength - (int)m_uCodeLength, (int)strCodeSignBlob.size());
+		ZLog::WarnV(ZL10n::GetFmt(ZL10nKeys::NO_ENOUGH_CODESIGN_SPACE), (int)m_uLength - (int)m_uCodeLength, (int)strCodeSignBlob.size());
 		return false;
 	}
 
@@ -615,7 +616,7 @@ uint32_t ZArchO::ReallocCodeSignSpace(const string& strNewFile)
 	codesignature_command* pcslc = (codesignature_command*)m_pCodeSignSegment;
 	if (NULL == pcslc) {
 		if (m_uLoadCommandsFreeSpace < 4) {
-			ZLog::Error(">>> Can't find free space of LoadCommands for CodeSignature!\n");
+			ZLog::Error(ZL10n::GetFmt(ZL10nKeys::CANT_FIND_LOADCMD_SPACE_CODESIGN));
 			return 0;
 		}
 
@@ -660,7 +661,7 @@ bool ZArchO::InjectDylib(bool bWeakInject, const char* szDylibFile)
 					dlc->cmd = BO((uint32_t)(bWeakInject ? LC_LOAD_WEAK_DYLIB : LC_LOAD_DYLIB));
 					const char* oldLoadType = bWeakInject ? "LC_LOAD_DYLIB" : "LC_LOAD_WEAK_DYLIB";
 					const char* newLoadType = bWeakInject ? "LC_LOAD_WEAK_DYLIB" : "LC_LOAD_DYLIB";
-					ZLog::WarnV(">>>\t\t %s -> %s\n", oldLoadType, newLoadType);
+					ZLog::WarnV(ZL10n::GetFmt(ZL10nKeys::LOAD_TYPE_CHANGED), oldLoadType, newLoadType);
 				}
 				return true;
 			}
@@ -672,7 +673,7 @@ bool ZArchO::InjectDylib(bool bWeakInject, const char* szDylibFile)
 	uint32_t uDylibFilePadding = (8 - uDylibFileLength % 8);
 	uint32_t uDylibCommandSize = sizeof(dylib_command) + uDylibFileLength + uDylibFilePadding;
 	if (m_uLoadCommandsFreeSpace > 0 && m_uLoadCommandsFreeSpace < uDylibCommandSize) { // some bin doesn't have '__text'
-		ZLog::Error(">>> Can't find free space of LoadCommands for LC_LOAD_DYLIB or LC_LOAD_WEAK_DYLIB!\n");
+		ZLog::Error(ZL10n::GetFmt(ZL10nKeys::CANT_FIND_LOADCMD_SPACE_DYLIB));
 		return false;
 	}
 
@@ -718,13 +719,13 @@ void ZArchO::RemoveDylibs(const set<string>& setDylibs)
 			const char* szDylib = (const char*)(pLoadCommand + BO(dlc->dylib.name.offset));
 			string dylibName = szDylib;
 			if (setDylibs.count(dylibName) > 0) {
-				ZLog::PrintV("\t\t\t%s\tclear\n", szDylib);
+				ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_DYLIB_CLEAR), szDylib);
 				clear_num++;
 				clear_data_size += load_command_size;
 				pLoadCommand += BO(plc->cmdsize);
 				continue;
 			}
-			ZLog::PrintV("\t\t\t%s\n", szDylib);
+			ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MACHO_DYLIB_ITEM), szDylib);
 		}
 		new_load_command_size += load_command_size;
 		memcpy(new_load_command_data, pLoadCommand, load_command_size);
@@ -739,4 +740,22 @@ void ZArchO::RemoveDylibs(const set<string>& setDylibs)
 	memset(pLoadCommand, 0, old_load_command_size);
 	memcpy(pLoadCommand, new_load_command_data, new_load_command_size);
 	free(new_load_command_data);
+}
+
+vector<string> ZArchO::ListDylibs()
+{
+	vector<string> dylibList;
+	uint8_t* pLoadCommand = m_pBase + m_uHeaderSize;
+
+	for (uint32_t i = 0; i < BO(m_pHeader->ncmds); i++) {
+		load_command* plc = (load_command*)pLoadCommand;
+		if (LC_LOAD_DYLIB == BO(plc->cmd) || LC_LOAD_WEAK_DYLIB == BO(plc->cmd)) {
+			dylib_command* dlc = (dylib_command*)pLoadCommand;
+			const char* szDyLib = (const char*)(pLoadCommand + BO(dlc->dylib.name.offset));
+			dylibList.push_back(string(szDyLib));
+		}
+		pLoadCommand += BO(plc->cmdsize);
+	}
+
+	return dylibList;
 }

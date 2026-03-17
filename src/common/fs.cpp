@@ -1,4 +1,5 @@
 #include "fs.h"
+#include "log_keys.h"
 
 #if !defined(S_ISREG) && defined(S_IFMT) && defined(S_IFREG)
 #define S_ISREG(m) (((m)&S_IFMT) == S_IFREG)
@@ -111,7 +112,7 @@ bool ZFile::WriteFile(const char* szFile, const char* szData, size_t sLen)
 		fclose(fp);
 		return (written == to_write);
 	} else {
-		ZLog::ErrorV("WriteFile: Failed in fopen! %s, %s\n", szFile, strerror(errno));
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::WRITEFILE_FOPEN_FAILED), szFile, strerror(errno));
 	}
 	return false;
 }
@@ -183,7 +184,7 @@ bool ZFile::AppendFile(const char* szFile, const char* szData, size_t sLen)
 		fclose(fp);
 		return (towrite > 0) ? false : true;
 	} else {
-		ZLog::ErrorV("AppendFile: Failed in fopen! %s, %s\n", szFile, strerror(errno));
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::APPENDFILE_FOPEN_FAILED), szFile, strerror(errno));
 	}
 	return false;
 }

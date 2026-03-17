@@ -26,7 +26,7 @@ OBJS = $(SRCS:../../src/%.cpp=$(OBJDIR)/%.o)
 TARGET = $(BINDIR)/zsign
 
 all: $(TARGET)
-	@$(ECHO) "$(GREEN)>>> Build OK!$(NC) -> $(abspath $(TARGET))"
+	@$(ECHO) "$(GREEN)➤ Build OK!$(NC) -> $(abspath $(TARGET))"
 
 $(TARGET): $(OBJS)
 	@mkdir -p $(BINDIR)
@@ -38,6 +38,6 @@ $(OBJDIR)/%.o: ../../src/%.cpp
 
 clean:
 	rm -rf $(OBJDIR) $(TARGET)
-	@$(ECHO) "$(GREEN)>>> Clean OK!$(NC)"
+	@$(ECHO) "$(GREEN)➤ Clean OK!$(NC)"
 
 .PHONY: all clean

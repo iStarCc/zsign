@@ -22,7 +22,8 @@ public:
 					bool bForce,
 					bool bWeakInject,
 					bool bEnableCache,
-					bool bRemoveProvision = false);
+					bool bRemoveProvision = false,
+					bool bRemoveDylibFiles = true);
 
 	bool SignFolder(list<ZSignAsset>* pSignAssets,
 					const string& strFolder,
@@ -34,7 +35,8 @@ public:
 					bool bForce,
 					bool bWeakInject,
 					bool bEnableCache,
-					bool bRemoveProvision = false);
+					bool bRemoveProvision = false,
+					bool bRemoveDylibFiles = true);
 
 private:
 	bool SignNode(jvalue& jvNode);
@@ -55,6 +57,7 @@ private:
 	bool			m_bForceSign;
 	bool			m_bWeakInject;
 	bool			m_bRemoveProvision;
+	bool			m_bRemoveDylibFiles;
 	ZSignAsset*		m_pSignAsset;
 	list<ZSignAsset>*	m_pSignAssets;
 	vector<string>	m_arrInjectDylibs;

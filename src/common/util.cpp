@@ -1,4 +1,5 @@
 #include "util.h"
+#include "log_keys.h"
 
 #ifdef _WIN32
 #define PRId64						"lld"
@@ -61,7 +62,7 @@ bool  ZUtil::SystemExecV(const char* szCmd, ...)
 
 	int status = system(szRealCmd);
 	if (0 != status) {
-		ZLog::ErrorV("SystemExec: \"%s\", error!\n", szRealCmd);
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::SYSTEM_EXEC_ERROR), szRealCmd);
 		return false;
 	}
 	return true;

@@ -1,4 +1,4 @@
-It might be the quickest cross-platform codesign alternative for iOS 12+, supporting macOS, Linux, Windows, and more features.
+It might be the quickest cross-platform codesign alternative for iOS 12+, supporting macOS, Linux, Windows, and more features. [中文](README_ZH.md)
 If this tool helps you, please don't forget to <font color=#FF0000 size=5>🌟**star**🌟</font> [ME](https://github.com/zhlynn).
 
 ## Compile 
@@ -77,8 +77,11 @@ options:
 -r, --bundle_version    New bundle version to change.
 -e, --entitlements      New entitlements to change.
 -z, --zip_level         Compressed level when output the ipa file. (0-9)
--l, --dylib             Path to inject dylib file. Use -l multiple time to inject multiple dylib files at once.
--D, --rm_dylib          Name of dylib to remove. Use -D multiple times to remove multiple dylibs at once.
+-l, --dylib             Inject dylib. Format: -l "install_path" or -l "install_path=source_path" (= and source optional). Use -l multiple times.
+-D, --rm_dylib          Name or path of dylib to remove. Use -D multiple times.
+                        - xxxx/xxx.dylib → match @executable_path/xxxx/xxx.dylib
+                        - @executable_path/xxxx/xxx.dylib → match as-is
+                        - @rpath/xxxx/xxx.dylib → match as-is
 -w, --weak              Inject dylib as LC_LOAD_WEAK_DYLIB.
 -i, --install           Install ipa file using ideviceinstaller command for test.
 -t, --temp_folder       Path to temporary folder for intermediate files.
@@ -91,6 +94,10 @@ options:
 -E, --rm_extensions     Remove all app extensions (PlugIns/Extensions).
 -W, --rm_watch          Remove watch app from the bundle.
 -U, --rm_uisd           Remove UISupportedDevices from Info.plist.
+-L, --list_dylibs       List dylibs injected into the main executable.
+-I, --inject_only       Inject dylib only (no signing). Use -l. Requires -o for .ipa output.
+-J, --remove_only       Remove dylib only (no signing). Use -D. Requires -o for .ipa output.
+    --no_remove_files   When removing dylibs, only remove load commands, do not delete dylib files.
 -q, --quiet             Quiet operation.
 -v, --version           Shows version.
 -h, --help              Shows help (this message).
@@ -123,7 +130,7 @@ options:
 
 6. Inject dylib into ipa and re-sign.
 ```bash
-./zsign -k dev.p12 -p 123 -m dev.prov -l demo.dylib -o output.ipa demo.ipa
+./zsign -k dev.p12 -p 123 -m dev.prov -l "@executable_path/demo.dylib=./demo.dylib" -o output.ipa demo.ipa
 ```
 
 7. Change bundle id and bundle name
@@ -131,45 +138,63 @@ options:
 ./zsign -k dev.p12 -p 123 -m dev.prov -b 'com.new.bundle.id' -n 'NewName' -o output.ipa demo.ipa
 ```
 
-8. Inject dylib(LC_LOAD_DYLIB) into mach-o file.
-```bash
-./zsign -a -l "@executable_path/demo1.dylib" -l "@executable_path/demo2.dylib" demo.app/execute
-```
-
-9. Inject dylib(LC_LOAD_WEAK_DYLIB) into mach-o file.
-```bash
-./zsign -w -l "@executable_path/demo.dylib" demo.app/execute
-```
-
-10. Sign ipa and extract metadata (app info + icon) to a directory.
+8. Sign ipa and extract metadata (app info + icon) to a directory.
 ```bash
 ./zsign -k dev.p12 -p 123 -m dev.prov -x ./metadata -o output.ipa demo.ipa
 # writes ./metadata/metadata.json and ./metadata/<hash>.png
 ```
 
-11. Enable documents support (Files app integration).
+9. Enable documents support (Files app integration).
 ```bash
 ./zsign -k dev.p12 -p 123 -m dev.prov -S -o output.ipa demo.ipa
 ```
 
-12. Set minimum OS version.
+10. Set minimum OS version.
 ```bash
 ./zsign -k dev.p12 -p 123 -m dev.prov -M 14.0 -o output.ipa demo.ipa
 ```
 
-13. Remove all app extensions (PlugIns/Extensions).
+11. Remove all app extensions (PlugIns/Extensions).
 ```bash
 ./zsign -k dev.p12 -p 123 -m dev.prov -E -o output.ipa demo.ipa
 ```
 
-14. Remove watch app from the bundle.
+12. Remove watch app from the bundle.
 ```bash
 ./zsign -k dev.p12 -p 123 -m dev.prov -W -o output.ipa demo.ipa
 ```
 
-15. Remove UISupportedDevices to allow the app on any device.
+13. Remove UISupportedDevices to allow the app on any device.
 ```bash
 ./zsign -k dev.p12 -p 123 -m dev.prov -U -o output.ipa demo.ipa
+```
+
+14. List dylibs injected into the main executable (supports Mach-O file, .app folder, or .ipa).
+```bash
+./zsign -L demo.app/demo
+./zsign -L demo.app
+./zsign -L demo.ipa
+```
+
+15. Inject dylib only (no signing, reference zsign-swift injectDyLib/injectDylibs).
+```bash
+# -l "install_path" or "install_path=source_path" (= and source optional, omit for path-only no copy)
+# Supports demo.app or demo.ipa; -o optional (required for .ipa input)
+# Default: LC_LOAD_WEAK_DYLIB; -a (adhoc): LC_LOAD_DYLIB; -w: LC_LOAD_WEAK_DYLIB (explicit)
+./zsign -I -l "@rpath/MyLib.dylib=/path/to/MyLib.dylib" demo.app|demo.ipa [-o output.ipa]
+./zsign -I -a -l "@rpath/MyLib.dylib=/path/to/MyLib.dylib" demo.app|demo.ipa [-o output.ipa]
+./zsign -I -w -l "@rpath/MyLib.dylib=/path/to/MyLib.dylib" demo.app|demo.ipa [-o output.ipa]
+```
+
+16. Remove dylib only (no signing, reference zsign-swift removeDylibs).
+```bash
+# -D format: xxxx/xxx.dylib → @executable_path/xxxx/xxx.dylib; @executable_path/... or @rpath/... → as-is
+# File deletion: @executable_path/xxx → app/xxx; @rpath/xxx → app/Frameworks/xxx
+# Supports demo.app or demo.ipa; -o optional (required for .ipa input)
+./zsign -J -D OldLib.dylib demo.app|demo.ipa [-o output.ipa]
+./zsign -J -D "@rpath/OldLib.dylib" demo.app [-o output.ipa]
+# Only remove load commands, do not delete dylib files:
+./zsign -J -D "@rpath/OldLib.dylib" --no_remove_files demo.app [-o output.ipa]
 ```
 
 ## Certificate Check (-C)
@@ -178,45 +203,45 @@ The `-C` flag checks the signing certificate of any supported file and performs 
 
 **Supported file types:** `.ipa`, `.mobileprovision`, `.p12`/`.pfx`, `.cer`/`.pem`, Mach-O binaries.
 
-16. Check an IPA file (reads binary directly from zip, no extraction).
+17. Check an IPA file (reads binary directly from zip, no extraction).
 ```bash
 ./zsign -C demo.ipa
 ```
 
-17. Check a mobile provisioning profile.
+18. Check a mobile provisioning profile.
 ```bash
 ./zsign -C dev.mobileprovision
 ```
 
-18. Check a P12/PFX certificate file.
+19. Check a P12/PFX certificate file.
 ```bash
 ./zsign -C dev.p12 -p 123
 ```
 
-19. Check a Mach-O binary directly.
+20. Check a Mach-O binary directly.
 ```bash
 ./zsign -C demo.app/demo
 ```
 
-20. Sign an IPA and verify the signed binary's certificate before archiving.
+21. Sign an IPA and verify the signed binary's certificate before archiving.
 ```bash
 ./zsign -C -k dev.p12 -p 123 -m dev.prov -o output.ipa demo.ipa
 ```
 
 **Example output:**
 ```
->>> Check:      demo.ipa (IPA)
->>> Signed:     Yes
->>> Name:       Apple Distribution: Company Name (TEAMID)
->>> Type:       Apple Distribution
->>> Org:        Company Name
->>> Team:       TEAMID
->>> Serial:     XX:XX:XX:XX:XX:XX:XX:XX
->>> Issued:     2025-01-01T00:00:00Z
->>> Expires:    2026-01-01T00:00:00Z (365 days remaining)
->>> Algorithm:  RSA 2048-bit
->>> Issuer:     Apple Worldwide Developer Relations Certification Authority
->>> OCSP:       Valid (ocsp.apple.com)
+➤ Check:      demo.ipa (IPA)
+➤ Signed:     Yes
+➤ Name:       Apple Distribution: Company Name (TEAMID)
+➤ Type:       Apple Distribution
+➤ Org:        Company Name
+➤ Team:       TEAMID
+➤ Serial:     XX:XX:XX:XX:XX:XX:XX:XX
+➤ Issued:     2025-01-01T00:00:00Z
+➤ Expires:    2026-01-01T00:00:00Z (365 days remaining)
+➤ Algorithm:  RSA 2048-bit
+➤ Issuer:     Apple Worldwide Developer Relations Certification Authority
+➤ OCSP:       Valid (ocsp.apple.com)
 ```
 
 ## How to sign quickly?

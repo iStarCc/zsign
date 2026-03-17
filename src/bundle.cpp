@@ -1,6 +1,7 @@
 #include "bundle.h"
 #include "base64.h"
 #include "common.h"
+#include "log_keys.h"
 #include "macho.h"
 #include "sys/stat.h"
 #include "sys/types.h"
@@ -183,7 +184,7 @@ bool ZBundle::GenerateCodeResources(const string& strFolder, jvalue& jvCodeRes)
 		if (m_bRemoveProvision && strKey == "embedded.mobileprovision") {
 			string strProvFile = strFolder + "/embedded.mobileprovision";
 			remove(strProvFile.c_str());
-			ZLog::Print(">>> Removed embedded.mobileprovision\n");
+			ZLog::Print(ZL10n::Get(ZL10nKeys::REMOVED_EMBEDDED_PROVISION));
 			continue;
 		}
 
@@ -296,14 +297,14 @@ bool ZBundle::SignNode(jvalue& jvNode)
 	if (jvNode.has("files")) {
 		for (size_t i = 0; i < jvNode["files"].size(); i++) {
 			string strFile = jvNode["files"][i];
-			ZLog::PrintV(">>> SignFile: \t%s\n", strFile.c_str());
+			ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::SIGN_FILE), strFile.c_str());
 			ZMachO macho;
 			if (macho.InitV("%s/%s", m_strAppFolder.c_str(), strFile.c_str())) {
 				if (!macho.Sign(m_pSignAsset, m_bForceSign, "", "", "", "")) {
 					return false;
 				}
 			} else {
-				ZLog::WarnV(">>> Warning: Skipping non-Mach-O file: \t%s\n", strFile.c_str());
+				ZLog::WarnV(ZL10n::GetFmt(ZL10nKeys::SKIP_NON_MACHO), strFile.c_str());
 			}
 		}
 	}
@@ -326,7 +327,7 @@ bool ZBundle::SignNode(jvalue& jvNode)
 	b64.decode(jvNode["sha256"].as_cstr(), strInfoSHA256);
 	if (strBundleId.empty() || strBundleExe.empty() || strInfoSHA1.empty() ||
 		strInfoSHA256.empty()) {
-		ZLog::ErrorV(">>> Can't get BundleID or BundleExecute or Info.plist SHASum in Info.plist! %s\n", strFolder.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::CANT_GET_BUNDLE_INFO), strFolder.c_str());
 		return false;
 	}
 
@@ -342,11 +343,11 @@ bool ZBundle::SignNode(jvalue& jvNode)
 	}
 
 	string strExePath = strBaseFolder + "/" + strBundleExe;
-	ZLog::PrintV(">>> SignFolder: %s, (%s)\n", ("/" == strFolder) ? ZUtil::GetBaseName(m_strAppFolder.c_str()) : strFolder.c_str(), strBundleExe.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::SIGN_FOLDER), ("/" == strFolder) ? ZUtil::GetBaseName(m_strAppFolder.c_str()) : strFolder.c_str(), strBundleExe.c_str());
 
 	ZMachO macho;
 	if (!macho.Init(strExePath.c_str())) {
-		ZLog::ErrorV(">>> Can't parse BundleExecute file! %s\n", strExePath.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::CANT_PARSE_EXECUTABLE), strExePath.c_str());
 		return false;
 	}
 
@@ -360,7 +361,7 @@ bool ZBundle::SignNode(jvalue& jvNode)
 
 	if (m_bForceSign || jvCodeRes.is_null()) { // create
 		if (!GenerateCodeResources(strBaseFolder, jvCodeRes)) {
-			ZLog::ErrorV(">>> Create CodeResources failed! %s\n", strBaseFolder.c_str());
+			ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::CREATE_CODERESOURCES_FAILED), strBaseFolder.c_str());
 			return false;
 		}
 	} else if (jvNode.has("changed")) { // use existsed
@@ -371,7 +372,7 @@ bool ZBundle::SignNode(jvalue& jvNode)
 			string strFileSHA1;
 			string strFileSHA256;
 			if (!ZSHA::SHABase64File(strRealFile.c_str(), strFileSHA1, strFileSHA256)) {
-				ZLog::ErrorV(">>> Can't get changed file SHASum! %s", strFile.c_str());
+				ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::CANT_GET_SHASUM), strFile.c_str());
 				return false;
 			}
 
@@ -391,7 +392,7 @@ bool ZBundle::SignNode(jvalue& jvNode)
 	string strCodeResData;
 	jvCodeRes.style_write_plist(strCodeResData);
 	if (!ZFile::WriteFile(strCodeResFile.c_str(), strCodeResData)) {
-		ZLog::ErrorV("\tWriting CodeResources failed! %s\n", strCodeResFile.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::WRITING_CODERESOURCES_FAILED), strCodeResFile.c_str());
 		return false;
 	}
 
@@ -404,12 +405,22 @@ bool ZBundle::SignNode(jvalue& jvNode)
 		}
 		if (!m_setRemoveDylibs.empty()) {
 			macho.RemoveDylibs(m_setRemoveDylibs);
-			for (const string& name : m_setRemoveDylibs) {
-				string baseName = name;
-				if (baseName.find("@executable_path/") == 0) {
-					baseName = baseName.substr(17);
+			if (m_bRemoveDylibFiles) {
+				const size_t lenExec = 17, lenRpath = 7;
+				for (const string& name : m_setRemoveDylibs) {
+					string baseName;
+					if (name.find("@executable_path/") == 0) {
+						baseName = name.substr(lenExec);
+					} else if (name.find("@rpath/") == 0) {
+						string afterRpath = name.substr(lenRpath);
+						baseName = (afterRpath.find("Frameworks/") == 0) ? afterRpath : string("Frameworks/") + afterRpath;
+					} else {
+						continue;
+					}
+					if (!baseName.empty()) {
+						ZFile::RemoveFileV("%s/%s", m_strAppFolder.c_str(), baseName.c_str());
+					}
 				}
-				ZFile::RemoveFileV("%s/%s", m_strAppFolder.c_str(), baseName.c_str());
 			}
 			bForceSign = true;
 		}
@@ -424,7 +435,7 @@ bool ZBundle::SignNode(jvalue& jvNode)
 			m_pSignAsset = &(*it);
 			if (endsWith(m_pSignAsset->m_strApplicationId, strBundleId)) {
 				if (!ZFile::WriteFileV(m_pSignAsset->m_strProvData, "%s/%s/embedded.mobileprovision", m_strAppFolder.c_str(), strFolder.c_str())) {
-					ZLog::ErrorV(">>> Can't write embedded.mobileprovision!\n");
+					ZLog::Error(ZL10n::GetFmt(ZL10nKeys::CANT_WRITE_PROVISION));
 					return false;
 				}
 				break;
@@ -441,7 +452,7 @@ bool ZBundle::SignNode(jvalue& jvNode)
 			m_pSignAsset = &(*it);
 			if (endsWith(m_pSignAsset->m_strApplicationId, strBundleId)) {
 				if (!ZFile::WriteFileV(m_pSignAsset->m_strProvData, "%s/%s/embedded.mobileprovision", m_strAppFolder.c_str(), strFolder.c_str())) {
-					ZLog::ErrorV(">>> Can't write embedded.mobileprovision!\n");
+					ZLog::Error(ZL10n::GetFmt(ZL10nKeys::CANT_WRITE_PROVISION));
 					return false;
 				}
 				break;
@@ -471,7 +482,7 @@ bool ZBundle::ModifyPluginsBundleId(const string& strOldBundleId, const string& 
 	for (const string& strFolder: arrFolders) {
 		jvalue jvInfo;
 		if (!jvInfo.read_plist_from_file("%s/Info.plist", strFolder.c_str())) {
-			ZLog::WarnV(">>> Can't find Plugin's Info.plist! %s\n", strFolder.c_str());
+			ZLog::WarnV(ZL10n::GetFmt(ZL10nKeys::CANT_FIND_PLUGIN_INFO), strFolder.c_str());
 			continue;
 		}
 
@@ -479,14 +490,14 @@ bool ZBundle::ModifyPluginsBundleId(const string& strOldBundleId, const string& 
 		string strNewPIBundleID = strOldPIBundleID;
 		ZUtil::StringReplace(strNewPIBundleID, strOldBundleId, strNewBundleId);
 		jvInfo["CFBundleIdentifier"] = strNewPIBundleID;
-		ZLog::PrintV(">>> BundleId: \t%s -> %s, Plugin\n", strOldPIBundleID.c_str(), strNewPIBundleID.c_str());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::BUNDLE_ID_PLUGIN), strOldPIBundleID.c_str(), strNewPIBundleID.c_str());
 
 		if (jvInfo.has("WKCompanionAppBundleIdentifier")) {
 			string strOldWKCBundleID = jvInfo["WKCompanionAppBundleIdentifier"];
 			string strNewWKCBundleID = strOldWKCBundleID;
 			ZUtil::StringReplace(strNewWKCBundleID, strOldBundleId, strNewBundleId);
 			jvInfo["WKCompanionAppBundleIdentifier"] = strNewWKCBundleID;
-			ZLog::PrintV(">>> BundleId: \t%s -> %s, Plugin-WKCompanionAppBundleIdentifier\n", strOldWKCBundleID.c_str(), strNewWKCBundleID.c_str());
+			ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::BUNDLE_ID_WK), strOldWKCBundleID.c_str(), strNewWKCBundleID.c_str());
 		}
 
 		if (jvInfo.has("NSExtension")) {
@@ -496,7 +507,7 @@ bool ZBundle::ModifyPluginsBundleId(const string& strOldBundleId, const string& 
 					string strNewWKBundleID = strOldWKBundleID;
 					ZUtil::StringReplace(strNewWKBundleID, strOldBundleId, strNewBundleId);
 					jvInfo["NSExtension"]["NSExtensionAttributes"]["WKAppBundleIdentifier"] = strNewWKBundleID;
-					ZLog::PrintV(">>> BundleId: \t%s -> %s, NSExtension-NSExtensionAttributes-WKAppBundleIdentifier\n", strOldWKBundleID.c_str(), strNewWKBundleID.c_str());
+					ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::BUNDLE_ID_EXT), strOldWKBundleID.c_str(), strNewWKBundleID.c_str());
 				}
 			}
 		}
@@ -511,14 +522,14 @@ bool ZBundle::ModifyBundleInfo(const string& strBundleId, const string& strBundl
 {
 	jvalue jvInfo;
 	if (!jvInfo.read_plist_from_file("%s/Info.plist", m_strAppFolder.c_str())) {
-		ZLog::ErrorV(">>> Can't find app's Info.plist! %s\n", m_strAppFolder.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::CANT_FIND_APP_INFO), m_strAppFolder.c_str());
 		return false;
 	}
 
 	if (!strBundleId.empty()) {
 		string strOldBundleId = jvInfo["CFBundleIdentifier"];
 		jvInfo["CFBundleIdentifier"] = strBundleId;
-		ZLog::PrintV(">>> BundleId: \t%s -> %s\n", strOldBundleId.c_str(), strBundleId.c_str());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::BUNDLE_ID), strOldBundleId.c_str(), strBundleId.c_str());
 		ModifyPluginsBundleId(strOldBundleId, strBundleId);
 	}
 
@@ -558,14 +569,14 @@ bool ZBundle::ModifyBundleInfo(const string& strBundleId, const string& strBundl
 		strNewDisplayName = ic.U82A(strNewDisplayName);
 #endif
 
-		ZLog::PrintV(">>> BundleName: %s -> %s\n", strOldDisplayName.c_str(), strNewDisplayName.c_str());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::BUNDLE_NAME), strOldDisplayName.c_str(), strNewDisplayName.c_str());
 	}
 
 	if (!strBundleVersion.empty()) {
 		string strOldBundleVersion = jvInfo["CFBundleVersion"];
 		jvInfo["CFBundleVersion"] = strBundleVersion;
 		jvInfo["CFBundleShortVersionString"] = strBundleVersion;
-		ZLog::PrintV(">>> BundleVersion: %s -> %s\n", strOldBundleVersion.c_str(), strBundleVersion.c_str());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::BUNDLE_VERSION), strOldBundleVersion.c_str(), strBundleVersion.c_str());
 	}
 
 	jvInfo.style_write_plist_to_file("%s/Info.plist", m_strAppFolder.c_str());
@@ -582,7 +593,7 @@ void ZBundle::ApplyAppModifications()
 		jvInfo["UIFileSharingEnabled"] = true;
 		jvInfo.style_write_plist_to_file("%s/Info.plist", m_strAppFolder.c_str());
 		m_bForceSign = true;
-		ZLog::Print(">>> Enabled documents support\n");
+		ZLog::Print(ZL10n::Get(ZL10nKeys::ENABLED_DOCUMENTS));
 	}
 
 	if (!m_strMinVersion.empty()) {
@@ -592,7 +603,7 @@ void ZBundle::ApplyAppModifications()
 		jvInfo["MinimumOSVersion"] = m_strMinVersion;
 		jvInfo.style_write_plist_to_file("%s/Info.plist", m_strAppFolder.c_str());
 		m_bForceSign = true;
-		ZLog::PrintV(">>> MinimumOSVersion: %s -> %s\n", strOldVersion.c_str(), m_strMinVersion.c_str());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::MIN_OS_VERSION), strOldVersion.c_str(), m_strMinVersion.c_str());
 	}
 
 	if (m_bRemoveExtensions) {
@@ -601,7 +612,7 @@ void ZBundle::ApplyAppModifications()
 			string strPath = m_strAppFolder + "/" + dir;
 			if (ZFile::IsFolder(strPath.c_str())) {
 				ZFile::RemoveFolder(strPath.c_str());
-				ZLog::PrintV(">>> Removed %s\n", dir);
+				ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::REMOVED), dir);
 				m_bForceSign = true;
 			}
 		}
@@ -613,7 +624,7 @@ void ZBundle::ApplyAppModifications()
 			string strPath = m_strAppFolder + "/" + dir;
 			if (ZFile::IsFolder(strPath.c_str())) {
 				ZFile::RemoveFolder(strPath.c_str());
-				ZLog::PrintV(">>> Removed %s\n", dir);
+				ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::REMOVED), dir);
 				m_bForceSign = true;
 			}
 		}
@@ -626,7 +637,7 @@ void ZBundle::ApplyAppModifications()
 			jvInfo.erase("UISupportedDevices");
 			jvInfo.style_write_plist_to_file("%s/Info.plist", m_strAppFolder.c_str());
 			m_bForceSign = true;
-			ZLog::Print(">>> Removed UISupportedDevices\n");
+			ZLog::Print(ZL10n::Get(ZL10nKeys::REMOVED_UI_DEVICES));
 		}
 	}
 }
@@ -641,22 +652,28 @@ bool ZBundle::SignFolder(ZSignAsset* pSignAsset,
 							bool bForce,
 							bool bWeakInject,
 							bool bEnableCache,
-							bool bRemoveProvision)
+							bool bRemoveProvision,
+							bool bRemoveDylibFiles)
 {
 	m_bForceSign = bForce;
 	m_pSignAsset = pSignAsset;
 	m_bWeakInject = bWeakInject;
 	m_bRemoveProvision = bRemoveProvision;
+	m_bRemoveDylibFiles = bRemoveDylibFiles;
 	m_setRemoveDylibs.clear();
 	for (const string& name : arrRemoveDylibNames) {
-		m_setRemoveDylibs.insert("@executable_path/" + name);
+		if (name[0] == '@') {
+			m_setRemoveDylibs.insert(name);
+		} else {
+			m_setRemoveDylibs.insert("@executable_path/" + name);
+		}
 	}
 	if (NULL == m_pSignAsset) {
 		return false;
 	}
 
 	if (!FindAppFolder(strFolder, m_strAppFolder)) {
-		ZLog::ErrorV(">>> Can't find app folder! %s\n", strFolder.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::CANT_FIND_APP_FOLDER), strFolder.c_str());
 		return false;
 	}
 
@@ -672,17 +689,45 @@ bool ZBundle::SignFolder(ZSignAsset* pSignAsset,
 	ZFile::RemoveFileV("%s/embedded.mobileprovision", m_strAppFolder.c_str());
 	if (!pSignAsset->m_strProvData.empty()) {
 		if (!ZFile::WriteFileV(pSignAsset->m_strProvData, "%s/embedded.mobileprovision", m_strAppFolder.c_str())) { // embedded.mobileprovision
-			ZLog::ErrorV(">>> Can't write embedded.mobileprovision!\n");
+			ZLog::Error(ZL10n::GetFmt(ZL10nKeys::CANT_WRITE_PROVISION));
 			return false;
 		}
 	}
 
 	if (!arrInjectDylibs.empty()) {
 		m_bForceSign = true;
-		for (const string& strDylibFile : arrInjectDylibs) {
-			string strFileName = ZUtil::GetBaseName(strDylibFile.c_str());
-			if (ZFile::CopyFileV(strDylibFile.c_str(), "%s/%s", m_strAppFolder.c_str(), strFileName.c_str())) {
-				m_arrInjectDylibs.push_back("@executable_path/" + strFileName);
+		const size_t lenExec = 17, lenRpath = 7;
+		for (const string& strDylibSpec : arrInjectDylibs) {
+			string strLoadPath;
+			string strSourceFile;
+			size_t eqPos = strDylibSpec.find('=');
+			if (eqPos != string::npos && eqPos > 1) {
+				// 字典格式: install_path=source_path (与 zsign-swift injectDylibs 一致)
+				strLoadPath = strDylibSpec.substr(0, eqPos);
+				strSourceFile = ZFile::GetFullPath(strDylibSpec.substr(eqPos + 1).c_str());
+			} else {
+				strLoadPath = strDylibSpec;
+			}
+			if (!strSourceFile.empty()) {
+				string relPath;
+				if (strLoadPath.find("@executable_path/") == 0) {
+					relPath = strLoadPath.substr(lenExec);
+				} else if (strLoadPath.find("@rpath/") == 0) {
+					string afterRpath = strLoadPath.substr(lenRpath);
+					relPath = (afterRpath.find("Frameworks/") == 0) ? afterRpath : string("Frameworks/") + afterRpath;
+				}
+				if (!relPath.empty()) {
+					string strDestFile = m_strAppFolder + "/" + relPath;
+					size_t lastSlash = strDestFile.rfind('/');
+					if (lastSlash != string::npos && lastSlash > m_strAppFolder.size()) {
+						ZFile::CreateFolder(strDestFile.substr(0, lastSlash).c_str());
+					}
+					if (ZFile::CopyFileV(strSourceFile.c_str(), "%s/%s", m_strAppFolder.c_str(), relPath.c_str())) {
+						m_arrInjectDylibs.push_back(strLoadPath);
+					}
+				}
+			} else {
+				m_arrInjectDylibs.push_back(strLoadPath);
 			}
 		}
 	}
@@ -698,7 +743,7 @@ bool ZBundle::SignFolder(ZSignAsset* pSignAsset,
 		jvRoot["path"] = "/";
 		jvRoot["root"] = m_strAppFolder;
 		if (!GetSignFolderInfo(m_strAppFolder, jvRoot, true)) {
-			ZLog::ErrorV(">>> Can't get BundleID, BundleVersion, or BundleExecute in Info.plist! %s\n", m_strAppFolder.c_str());
+			ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::CANT_GET_INFO_PLIST), m_strAppFolder.c_str());
 			return false;
 		}
 		if (!GetObjectsToSign(m_strAppFolder, jvRoot)) {
@@ -716,13 +761,13 @@ bool ZBundle::SignFolder(ZSignAsset* pSignAsset,
 	strAppName = ic.U82A(strAppName);
 #endif
 
-	ZLog::PrintV(">>> Signing: \t%s ...\n", m_strAppFolder.c_str());
-	ZLog::PrintV(">>> AppName: \t%s\n", strAppName.c_str());
-	ZLog::PrintV(">>> BundleId: \t%s\n", jvRoot["bundle_id"].as_cstr());
-	ZLog::PrintV(">>> Version: \t%s\n", jvRoot["bundle_version"].as_cstr());
-	ZLog::PrintV(">>> TeamId: \t%s\n", m_pSignAsset->m_strTeamId.c_str());
-	ZLog::PrintV(">>> SubjectCN: \t%s\n", m_pSignAsset->m_strSubjectCN.c_str());
-	ZLog::PrintV(">>> ReadCache: \t%s\n", m_bForceSign ? "NO" : "YES");
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::SIGNING_APP), ZUtil::GetBaseName(m_strAppFolder.c_str()));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::APP_NAME), strAppName.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::BUNDLE_ID_VALUE), jvRoot["bundle_id"].as_cstr());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::VERSION), jvRoot["bundle_version"].as_cstr());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::TEAM_ID), m_pSignAsset->m_strTeamId.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::SUBJECT_CN), m_pSignAsset->m_strSubjectCN.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::READ_CACHE), m_bForceSign ? ZL10n::Get(ZL10nKeys::CACHE_NO) : ZL10n::Get(ZL10nKeys::CACHE_YES));
 
 	if (SignNode(jvRoot)) {
 		if (bEnableCache) {
@@ -745,8 +790,9 @@ bool ZBundle::SignFolder(list<ZSignAsset>* pSignAssets,
 						bool bForce,
 						bool bWeakInject,
 						bool bEnableCache,
-						bool bRemoveProvision)
+						bool bRemoveProvision,
+						bool bRemoveDylibFiles)
 {
 	m_pSignAssets = pSignAssets;
-	return SignFolder(&m_pSignAssets->front(), strFolder, strBundleId, strBundleVersion, strDisplayName, arrInjectDylibs, arrRemoveDylibNames, bForce, bWeakInject, bEnableCache, bRemoveProvision);
+	return SignFolder(&m_pSignAssets->front(), strFolder, strBundleId, strBundleVersion, strDisplayName, arrInjectDylibs, arrRemoveDylibNames, bForce, bWeakInject, bEnableCache, bRemoveProvision, bRemoveDylibFiles);
 }

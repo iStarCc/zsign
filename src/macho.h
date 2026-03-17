@@ -21,6 +21,7 @@ public:
 				const string& strCodeResourcesData);
 	bool InjectDylib(bool bWeakInject, const char* szDylibFile);
 	void RemoveDylibs(const set<string>& setDylibs);
+	vector<string> ListDylibs();
 
 private:
 	bool OpenFile(const char* szPath);

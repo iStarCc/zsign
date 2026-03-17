@@ -1,4 +1,5 @@
 #include "archive.h"
+#include "log_keys.h"
 
 #ifdef _WIN32
 #include <minizip/zip.h>
@@ -43,7 +44,7 @@ bool Zip::_WriteFileToZip(void* hZip, const string& strFile, const string& strRe
 	FILE* fp = NULL;
 	_fopen64(fp, strFile.c_str(), "rb");
 	if (NULL == fp) {
-		ZLog::ErrorV(">>> Zip: Failed to open file: %s\n", strFile.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::ZIP_FAILED_OPEN_FILE), strFile.c_str());
 		return false;
 	}
 
@@ -51,7 +52,7 @@ bool Zip::_WriteFileToZip(void* hZip, const string& strFile, const string& strRe
 	GetModificationTime(strFile.c_str(), &zi);
 	if (ZIP_OK != zipOpenNewFileInZip3_64(hZip, strRelativePath.c_str(), &zi, NULL, 0, NULL, 0, NULL, Z_DEFLATED, zip_level, 0, -MAX_WBITS, DEF_MEM_LEVEL, 0, NULL, 0, 0)) {
 		fclose(fp);
-		ZLog::ErrorV(">>> Zip: Failed to add file to zip: %s\n", strRelativePath.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::ZIP_FAILED_ADD_FILE), strRelativePath.c_str());
 		return false;
 	}
 
@@ -76,7 +77,7 @@ bool Zip::_CreateFolderToZip(void* hZip, const string& strFolder, const string& 
 	zip_fileinfo zi = { 0 };
 	GetModificationTime(strFolder.c_str(), &zi);
 	if (ZIP_OK != zipOpenNewFileInZip3_64(hZip, strRelativePath.c_str(), &zi, NULL, 0, NULL, 0, NULL, Z_DEFLATED, zip_level, 0, -MAX_WBITS, DEF_MEM_LEVEL, 0, NULL, 0, 0)) {
-		ZLog::ErrorV(">>> Zip: Failed to create folder to zip: %s\n", strRelativePath.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::ZIP_FAILED_CREATE_FOLDER), strRelativePath.c_str());
 		return false;
 	}
 	zipCloseFileInZip(hZip);
@@ -86,17 +87,26 @@ bool Zip::_CreateFolderToZip(void* hZip, const string& strFolder, const string& 
 bool Zip::Archive(const string& strFolder, const string& strZipFile, int nZipLevel)
 {
 	 if (nZipLevel < 0 || nZipLevel > 9) {
-		ZLog::ErrorV(">>> Zip: Invalid compression level: %d\n", nZipLevel);
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::ZIP_INVALID_COMPRESSION_LEVEL), nZipLevel);
         return false;
     }
     
+	// 先统计总条目数（用于进度显示）
+	size_t nTotal = 0;
+	ZFile::EnumFolder(strFolder.c_str(), true, NULL, [&](bool, const string&) {
+		nTotal++;
+		return false;
+	});
+    
     zipFile zf = zipOpen64(strZipFile.c_str(), 0);
     if (!zf) {
-		ZLog::ErrorV(">>> Zip: Failed to create zip file: %s\n", strZipFile.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::ZIP_FAILED_CREATE), strZipFile.c_str());
         return false;
     }
 
 	bool bRet = true;
+	size_t nCurrent = 0;
+	int lastPercent = -1;
 	ZFile::EnumFolder(strFolder.c_str(), true, NULL, [&](bool bFolder, const string& strPath) {
 		string strRelativePath = strPath.substr(strFolder.size() + 1);
 		ZUtil::StringReplace(strRelativePath, "\\", "/");
@@ -116,6 +126,16 @@ bool Zip::Archive(const string& strFolder, const string& strZipFile, int nZipLev
 			if (!_WriteFileToZip(zf, strPath, strRelativePath, nZipLevel)) {
 				bRet = false;
 				return true;
+			}
+		}
+		nCurrent++;
+		// 进度显示：总数≤20 每项都显示，否则每 5% 显示一次
+		if (nTotal > 0) {
+			int pct = (int)(nCurrent * 100 / nTotal);
+			bool shouldPrint = (nTotal <= 20) || (pct >= lastPercent + 5) || (pct == 100);
+			if (shouldPrint && pct > lastPercent) {
+				lastPercent = pct;
+				ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::ARCHIVE_PROGRESS), nCurrent, nTotal, pct);
 			}
 		}
 		return false;

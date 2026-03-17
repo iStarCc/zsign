@@ -1,4 +1,5 @@
 #include "common.h"
+#include "log_keys.h"
 #include "certcheck.h"
 #include "openssl.h"
 #include "mach-o.h"
@@ -491,43 +492,43 @@ static void PrintCertInfo(X509* cert, const string& fileTypeStr, bool showSigned
 	int daysLeft = DaysRemaining(X509_get0_notAfter(cert));
 
 	if (showSigned) {
-		ZLog::PrintV(">>> Signed:\t%s\n", isSigned ? "Yes" : "No");
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_SIGNED), isSigned ? ZL10n::Get(ZL10nKeys::CERT_YES) : ZL10n::Get(ZL10nKeys::CERT_NO));
 	}
-	ZLog::PrintV(">>> Name:\t%s\n", cn.c_str());
-	ZLog::PrintV(">>> Type:\t%s\n", certType.c_str());
-	if (!org.empty()) ZLog::PrintV(">>> Org:\t%s\n", org.c_str());
-	if (!ou.empty()) ZLog::PrintV(">>> Team:\t%s\n", ou.c_str());
-	ZLog::PrintV(">>> Serial:\t%s\n", serial.c_str());
-	ZLog::PrintV(">>> Issued:\t%s\n", issuedStr.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_NAME), cn.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_TYPE), certType.c_str());
+	if (!org.empty()) ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_ORG), org.c_str());
+	if (!ou.empty()) ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_TEAM), ou.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_SERIAL), serial.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_ISSUED), issuedStr.c_str());
 
 	if (daysLeft < 0) {
-		ZLog::PrintV(">>> Expires:\t%s (EXPIRED %d days ago)\n", expiresStr.c_str(), -daysLeft);
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_EXPIRES_EXPIRED), expiresStr.c_str(), -daysLeft);
 	} else if (daysLeft < 30) {
-		ZLog::PrintV(">>> Expires:\t%s (%d days remaining!)\n", expiresStr.c_str(), daysLeft);
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_EXPIRES_REMAINING_WARN), expiresStr.c_str(), daysLeft);
 	} else {
-		ZLog::PrintV(">>> Expires:\t%s (%d days remaining)\n", expiresStr.c_str(), daysLeft);
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_EXPIRES_REMAINING), expiresStr.c_str(), daysLeft);
 	}
 
-	ZLog::PrintV(">>> Algorithm:\t%s\n", keyAlgo.c_str());
-	ZLog::PrintV(">>> Issuer:\t%s\n", issuerCN.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_ALGORITHM), keyAlgo.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_ISSUER), issuerCN.c_str());
 }
 
 static int PrintOCSPResult(const OCSPResult& result)
 {
 	if (result.status == "Valid") {
-		ZLog::Print(">>> OCSP:\tValid (ocsp.apple.com)\n");
+		ZLog::Print(ZL10n::Get(ZL10nKeys::OCSP_VALID));
 	} else if (result.status == "Revoked") {
-		ZLog::Print(">>> OCSP:\tREVOKED\n");
+		ZLog::Print(ZL10n::Get(ZL10nKeys::OCSP_REVOKED));
 		if (!result.revokedTime.empty())
-			ZLog::PrintV(">>> Revoked:\t%s\n", result.revokedTime.c_str());
+			ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::OCSP_REVOKED_TIME), result.revokedTime.c_str());
 	} else if (result.status == "Unknown") {
-		ZLog::Print(">>> OCSP:\tUnknown\n");
+		ZLog::Print(ZL10n::Get(ZL10nKeys::OCSP_UNKNOWN));
 	} else {
-		ZLog::Print(">>> OCSP:\tError\n");
+		ZLog::Print(ZL10n::Get(ZL10nKeys::OCSP_ERROR));
 	}
 
 	if (!result.errorDetail.empty())
-		ZLog::PrintV(">>> Detail:\t%s\n", result.errorDetail.c_str());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::OCSP_DETAIL), result.errorDetail.c_str());
 
 	if (result.status == "Valid") return 0;
 	if (result.status == "Revoked") return 1;
@@ -540,7 +541,7 @@ int CheckCertificate(const string& strFilePath, const string& strPassword)
 {
 	string data;
 	if (!ZFile::ReadFile(strFilePath.c_str(), data) || data.empty()) {
-		ZLog::ErrorV(">>> Cannot read file: %s\n", strFilePath.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::CERT_CANT_READ_FILE), strFilePath.c_str());
 		return -1;
 	}
 
@@ -574,23 +575,23 @@ int CheckCertificate(const string& strFilePath, const string& strPassword)
 		fileTypeStr = (fileType == CERT_FILE_PEM) ? "PEM" : "DER";
 		cert = LoadFromCER(data); break;
 	default:
-		ZLog::ErrorV(">>> Unknown file type: %s\n", strFilePath.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::CERT_UNKNOWN_FILE_TYPE), strFilePath.c_str());
 		return -1;
 	}
 
-	ZLog::PrintV("\n>>> Check:\t%s (%s)\n", strFilePath.c_str(), fileTypeStr.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CERT_CHECK), strFilePath.c_str(), fileTypeStr.c_str());
 
 	if (showSigned && !isSigned) {
-		ZLog::Print(">>> Signed:\tNo\n\n");
+		ZLog::Print(ZL10n::Get(ZL10nKeys::CERT_SIGNED_NO));
 		return -2;
 	}
 
 	if (!cert) {
 		if (showSigned) {
-			ZLog::Print(">>> Signed:\tNo\n\n");
+			ZLog::Print(ZL10n::Get(ZL10nKeys::CERT_SIGNED_NO));
 			return -2;
 		}
-		ZLog::ErrorV(">>> Failed to load certificate from %s\n", strFilePath.c_str());
+		ZLog::ErrorV(ZL10n::GetFmt(ZL10nKeys::CERT_LOAD_FAILED), strFilePath.c_str());
 		return -1;
 	}
 
@@ -605,7 +606,7 @@ int CheckCertificate(const string& strFilePath, const string& strPassword)
 
 	int retCode = 0;
 	if (!issuer) {
-		ZLog::Print(">>> OCSP:\tSkipped (non-WWDR issuer)\n");
+		ZLog::Print(ZL10n::Get(ZL10nKeys::OCSP_SKIPPED));
 		retCode = expired ? 2 : 0;
 	} else {
 		OCSPResult ocspResult = PerformOCSP(cert, issuer);

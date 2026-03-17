@@ -1,4 +1,5 @@
 #include "common.h"
+#include "log_keys.h"
 #include "json.h"
 #include "mach-o.h"
 #include "openssl.h"
@@ -87,11 +88,11 @@ string ZSign::_DER(const jvalue& data)
 uint32_t ZSign::SlotParseGeneralHeader(const char* szSlotName, uint8_t* pSlotBase, CS_BlobIndex* pbi)
 {
 	uint32_t uSlotLength = LE(*(((uint32_t*)pSlotBase) + 1));
-	ZLog::PrintV("\n  > %s: \n", szSlotName);
-	ZLog::PrintV("\ttype: \t\t0x%x\n", LE(pbi->type));
-	ZLog::PrintV("\toffset: \t%u\n", LE(pbi->offset));
-	ZLog::PrintV("\tmagic: \t\t0x%x\n", LE(*((uint32_t*)pSlotBase)));
-	ZLog::PrintV("\tlength: \t%u\n", uSlotLength);
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_SLOT_HEADER), szSlotName);
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_SLOT_TYPE), LE(pbi->type));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_SLOT_OFFSET), LE(pbi->offset));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_SLOT_MAGIC), LE(*((uint32_t*)pSlotBase)));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_SLOT_LENGTH), uSlotLength);
 	return uSlotLength;
 }
 
@@ -205,7 +206,7 @@ bool ZSign::SlotParseEntitlements(uint8_t* pSlotBase, CS_BlobIndex* pbi)
 	string strEntitlements = "\t\t\t";
 	strEntitlements.append((const char*)pSlotBase + 8, uSlotLength - 8);
 	ZUtil::StringReplace(strEntitlements, "\n", "\n\t\t\t");
-	ZLog::PrintV("\tentitlements: \n%s\n", strEntitlements.c_str());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_ENTITLEMENTS), strEntitlements.c_str());
 
 	SlotParseGeneralTailer(pSlotBase, uSlotLength);
 
@@ -287,42 +288,42 @@ bool ZSign::SlotParseCodeDirectory(uint8_t* pSlotBase, CS_BlobIndex* pbi)
 		arrSpecialSlots.push_back(pHashes - cdHeader.hashSize * (i + 1));
 	}
 
-	ZLog::PrintV("\tversion: \t0x%x\n", LE(cdHeader.version));
-	ZLog::PrintV("\tflags: \t\t%u\n", LE(cdHeader.flags));
-	ZLog::PrintV("\thashOffset: \t%u\n", LE(cdHeader.hashOffset));
-	ZLog::PrintV("\tidentOffset: \t%u\n", LE(cdHeader.identOffset));
-	ZLog::PrintV("\tnSpecialSlots: \t%u\n", LE(cdHeader.nSpecialSlots));
-	ZLog::PrintV("\tnCodeSlots: \t%u\n", LE(cdHeader.nCodeSlots));
-	ZLog::PrintV("\tcodeLimit: \t%u\n", LE(cdHeader.codeLimit));
-	ZLog::PrintV("\thashSize: \t%u\n", cdHeader.hashSize);
-	ZLog::PrintV("\thashType: \t%u\n", cdHeader.hashType);
-	ZLog::PrintV("\tspare1: \t%u\n", cdHeader.spare1);
-	ZLog::PrintV("\tpageSize: \t%u\n", cdHeader.pageSize);
-	ZLog::PrintV("\tspare2: \t%u\n", LE(cdHeader.spare2));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_VERSION), LE(cdHeader.version));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_FLAGS), LE(cdHeader.flags));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_HASH_OFFSET), LE(cdHeader.hashOffset));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_IDENT_OFFSET), LE(cdHeader.identOffset));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_N_SPECIAL_SLOTS), LE(cdHeader.nSpecialSlots));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_N_CODE_SLOTS), LE(cdHeader.nCodeSlots));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_CODE_LIMIT), LE(cdHeader.codeLimit));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_HASH_SIZE), cdHeader.hashSize);
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_HASH_TYPE), cdHeader.hashType);
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_SPARE1), cdHeader.spare1);
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_PAGE_SIZE), cdHeader.pageSize);
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_SPARE2), LE(cdHeader.spare2));
 
 	uint32_t uVersion = LE(cdHeader.version);
 	if (uVersion >= 0x20100) {
-		ZLog::PrintV("\tscatterOffset: \t%u\n", LE(cdHeader.scatterOffset));
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_SCATTER_OFFSET), LE(cdHeader.scatterOffset));
 	}
 	if (uVersion >= 0x20200) {
-		ZLog::PrintV("\tteamOffset: \t%u\n", LE(cdHeader.teamOffset));
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_TEAM_OFFSET), LE(cdHeader.teamOffset));
 	}
 	if (uVersion >= 0x20300) {
-		ZLog::PrintV("\tspare3: \t%u\n", LE(cdHeader.spare3));
-		ZLog::PrintV("\tcodeLimit64: \t%llu\n", LE(cdHeader.codeLimit64));
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_SPARE3), LE(cdHeader.spare3));
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_CODE_LIMIT64), LE(cdHeader.codeLimit64));
 	}
 	if (uVersion >= 0x20400) {
-		ZLog::PrintV("\texecSegBase: \t%llu\n", LE(cdHeader.execSegBase));
-		ZLog::PrintV("\texecSegLimit: \t%llu\n", LE(cdHeader.execSegLimit));
-		ZLog::PrintV("\texecSegFlags: \t%llu\n", LE(cdHeader.execSegFlags));
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_EXEC_SEG_BASE), LE(cdHeader.execSegBase));
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_EXEC_SEG_LIMIT), LE(cdHeader.execSegLimit));
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_EXEC_SEG_FLAGS), LE(cdHeader.execSegFlags));
 	}
 
-	ZLog::PrintV("\tidentifier: \t%s\n", pSlotBase + LE(cdHeader.identOffset));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_IDENTIFIER), pSlotBase + LE(cdHeader.identOffset));
 	if (uVersion >= 0x20200) {
-		ZLog::PrintV("\tteamid: \t%s\n", pSlotBase + LE(cdHeader.teamOffset));
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_TEAMID), pSlotBase + LE(cdHeader.teamOffset));
 	}
 
-	ZLog::PrintV("\tSpecialSlots:\n");
+	ZLog::Print(ZL10n::Get(ZL10nKeys::CODESIGN_SPECIAL_SLOTS));
 	for (int i = LE(cdHeader.nSpecialSlots) - 1; i >= 0; i--) {
 		const char* suffix = "\t\n";
 		switch (i) {
@@ -349,12 +350,12 @@ bool ZSign::SlotParseCodeDirectory(uint8_t* pSlotBase, CS_BlobIndex* pbi)
 	}
 
 	if (ZLog::IsDebug()) {
-		ZLog::Print("\tCodeSlots:\n");
+		ZLog::Print(ZL10n::Get(ZL10nKeys::CODESIGN_CODE_SLOTS));
 		for (uint32_t i = 0; i < LE(cdHeader.nCodeSlots); i++) {
 			ZSHA::Print("\t\t\t", arrCodeSlots[i], cdHeader.hashSize);
 		}
 	} else {
-		ZLog::Print("\tCodeSlots: \tomitted. (use -d option for details)\n");
+		ZLog::Print(ZL10n::Get(ZL10nKeys::CODESIGN_CODE_SLOTS_OMITTED));
 	}
 
 	SlotParseGeneralTailer(pSlotBase, uSlotLength);
@@ -545,42 +546,42 @@ bool ZSign::SlotParseCMSSignature(uint8_t* pSlotBase, CS_BlobIndex* pbi)
 	ZSignAsset::GetCMSInfo(pSlotBase + 8, uSlotLength - 8, jvInfo);
 	//ZLog::PrintV("%s\n", jvInfo.styleWrite().c_str());
 
-	ZLog::Print("\tCertificates: \n");
+	ZLog::Print(ZL10n::Get(ZL10nKeys::CODESIGN_CERTIFICATES));
 	for (size_t i = 0; i < jvInfo["certs"].size(); i++) {
-		ZLog::PrintV("\t\t\t%s\t<=\t%s\n", jvInfo["certs"][i]["Subject"]["CN"].as_cstr(), jvInfo["certs"][i]["Issuer"]["CN"].as_cstr());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_CERT_ENTRY), jvInfo["certs"][i]["Subject"]["CN"].as_cstr(), jvInfo["certs"][i]["Issuer"]["CN"].as_cstr());
 	}
 
-	ZLog::Print("\tSignedAttrs: \n");
+	ZLog::Print(ZL10n::Get(ZL10nKeys::CODESIGN_SIGNED_ATTRS));
 	if (jvInfo["attrs"].has("ContentType")) {
-		ZLog::PrintV("\t  ContentType: \t%s => %s\n", jvInfo["attrs"]["ContentType"]["obj"].as_cstr(), jvInfo["attrs"]["ContentType"]["data"].as_cstr());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_ATTR_CONTENT_TYPE), jvInfo["attrs"]["ContentType"]["obj"].as_cstr(), jvInfo["attrs"]["ContentType"]["data"].as_cstr());
 	}
 
 	if (jvInfo["attrs"].has("SigningTime")) {
-		ZLog::PrintV("\t  SigningTime: \t%s => %s\n", jvInfo["attrs"]["SigningTime"]["obj"].as_cstr(), jvInfo["attrs"]["SigningTime"]["data"].as_cstr());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_ATTR_SIGNING_TIME), jvInfo["attrs"]["SigningTime"]["obj"].as_cstr(), jvInfo["attrs"]["SigningTime"]["data"].as_cstr());
 	}
 
 	if (jvInfo["attrs"].has("MessageDigest")) {
-		ZLog::PrintV("\t  MsgDigest: \t%s => %s\n", jvInfo["attrs"]["MessageDigest"]["obj"].as_cstr(), jvInfo["attrs"]["MessageDigest"]["data"].as_cstr());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_ATTR_MSG_DIGEST), jvInfo["attrs"]["MessageDigest"]["obj"].as_cstr(), jvInfo["attrs"]["MessageDigest"]["data"].as_cstr());
 	}
 
 	if (jvInfo["attrs"].has("CDHashes")) {
 		string strData = jvInfo["attrs"]["CDHashes"]["data"].as_cstr();
 		ZUtil::StringReplace(strData, "\n", "\n\t\t\t\t");
-		ZLog::PrintV("\t  CDHashes: \t%s => \n\t\t\t\t%s\n", jvInfo["attrs"]["CDHashes"]["obj"].as_cstr(), strData.c_str());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_ATTR_CDHASHES), jvInfo["attrs"]["CDHashes"]["obj"].as_cstr(), strData.c_str());
 	}
 
 	if (jvInfo["attrs"].has("CDHashes2")) {
-		ZLog::PrintV("\t  CDHashes2: \t%s => \n", jvInfo["attrs"]["CDHashes2"]["obj"].as_cstr());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_ATTR_CDHASHES2), jvInfo["attrs"]["CDHashes2"]["obj"].as_cstr());
 		for (size_t i = 0; i < jvInfo["attrs"]["CDHashes2"]["data"].size(); i++) {
-			ZLog::PrintV("\t\t\t\t%s\n", jvInfo["attrs"]["CDHashes2"]["data"][i].as_cstr());
+			ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_ATTR_CDHASHES2_ITEM), jvInfo["attrs"]["CDHashes2"]["data"][i].as_cstr());
 		}
 	}
 
 	for (size_t i = 0; i < jvInfo["attrs"]["unknown"].size(); i++) {
 		jvalue& jvAttr = jvInfo["attrs"]["unknown"][i];
-		ZLog::PrintV("\t  UnknownAttr: \t%s => %s, type: %d, count: %d\n", jvAttr["obj"].as_cstr(), jvAttr["name"].as_cstr(), jvAttr["type"].as_int(), jvAttr["count"].as_int());
+		ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_ATTR_UNKNOWN), jvAttr["obj"].as_cstr(), jvAttr["name"].as_cstr(), jvAttr["type"].as_int(), jvAttr["count"].as_int());
 	}
-	ZLog::Print("\n");
+	ZLog::Print(ZL10n::Get(ZL10nKeys::CODESIGN_NEWLINE));
 
 	SlotParseGeneralTailer(pSlotBase, uSlotLength);
 
@@ -645,10 +646,10 @@ bool ZSign::ParseCodeSignature(uint8_t* pCSBase)
 		return false;
 	}
 
-	ZLog::PrintV("\n>>> CodeSignature Segment: \n");
-	ZLog::PrintV("\tmagic: \t\t0x%x\n", LE(psb->magic));
-	ZLog::PrintV("\tlength: \t%d\n", LE(psb->length));
-	ZLog::PrintV("\tslots: \t\t%d\n", LE(psb->count));
+	ZLog::Print(ZL10n::Get(ZL10nKeys::CODESIGN_SEGMENT_HEADER));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_MAGIC), LE(psb->magic));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_LENGTH), LE(psb->length));
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::CODESIGN_SLOTS), LE(psb->count));
 
 	CS_BlobIndex* pbi = (CS_BlobIndex*)(pCSBase + sizeof(CS_SuperBlob));
 	for (uint32_t i = 0; i < LE(psb->count); i++, pbi++) {
