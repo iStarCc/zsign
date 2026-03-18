@@ -82,7 +82,7 @@ int usage()
 	ZLog::Print("-z, --zip_level\t\tCompressed level when output the ipa file. (0-9)\n");
 	ZLog::Print("-l, --dylib\t\tInject dylib. Format: -l \"install_path\" or -l \"install_path=source_path\" (= optional). Use -l multiple times.\n");
 	ZLog::Print("-D, --rm_dylib\t\tName or path of dylib to remove (e.g. OldLib.dylib or @rpath/OldLib.dylib). Use -D multiple times.\n");
-	ZLog::Print("-w, --weak\t\tInject dylib as LC_LOAD_WEAK_DYLIB (default when not adhoc).\n");
+	ZLog::Print("-w, --weak\t\tInject dylib as LC_LOAD_WEAK_DYLIB.\n");
 	ZLog::Print("-i, --install\t\tInstall ipa file using ideviceinstaller command for test.\n");
 	ZLog::Print("-t, --temp_folder\tPath to temporary folder for intermediate files.\n");
 	ZLog::Print("-2, --sha256_only\tSerialize a single code directory that uses SHA256.\n");
@@ -151,7 +151,7 @@ int main(int argc, char* argv[])
 
 	bool bForce = false;
 	bool bInstall = false;
-	bool bWeakInject = true;  // 默认 LC_LOAD_WEAK_DYLIB；-a (adhoc) 时改为 LC_LOAD_DYLIB
+	bool bWeakInject = false;  // 默认 LC_LOAD_DYLIB；-w 时改为 LC_LOAD_WEAK_DYLIB
 	bool bAdhoc = false;
 	bool bSHA256Only = false;
 	bool bCheckSignature = false;

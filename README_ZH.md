@@ -186,9 +186,8 @@ make clean && make
 ```bash
 # -l "install_path" 或 "install_path=source_path"，= 及后可不写（不写则仅添加 load command 不复制文件）
 # 支持 demo.app 或 demo.ipa；-o 可选（.ipa 输入时必填）
-# 默认：LC_LOAD_WEAK_DYLIB；-a（adhoc）：LC_LOAD_DYLIB；-w：LC_LOAD_WEAK_DYLIB（显式）
+# 默认：LC_LOAD_DYLIB；-w：LC_LOAD_WEAK_DYLIB
 ./zsign -I -l "@rpath/MyLib.dylib=/path/to/MyLib.dylib" demo.app|demo.ipa [-o output.ipa]
-./zsign -I -a -l "@rpath/MyLib.dylib=/path/to/MyLib.dylib" demo.app|demo.ipa [-o output.ipa]
 ./zsign -I -w -l "@rpath/MyLib.dylib=/path/to/MyLib.dylib" demo.app|demo.ipa [-o output.ipa]
 ```
 

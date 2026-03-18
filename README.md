@@ -180,9 +180,8 @@ options:
 ```bash
 # -l "install_path" or "install_path=source_path" (= and source optional, omit for path-only no copy)
 # Supports demo.app or demo.ipa; -o optional (required for .ipa input)
-# Default: LC_LOAD_WEAK_DYLIB; -a (adhoc): LC_LOAD_DYLIB; -w: LC_LOAD_WEAK_DYLIB (explicit)
+# Default: LC_LOAD_DYLIB; -w: LC_LOAD_WEAK_DYLIB
 ./zsign -I -l "@rpath/MyLib.dylib=/path/to/MyLib.dylib" demo.app|demo.ipa [-o output.ipa]
-./zsign -I -a -l "@rpath/MyLib.dylib=/path/to/MyLib.dylib" demo.app|demo.ipa [-o output.ipa]
 ./zsign -I -w -l "@rpath/MyLib.dylib=/path/to/MyLib.dylib" demo.app|demo.ipa [-o output.ipa]
 ```
 
