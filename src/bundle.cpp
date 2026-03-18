@@ -56,9 +56,14 @@ bool ZBundle::GetSignFolderInfo(const string& strFolder, jvalue& jvNode, bool bG
 	string strBundleId = jvInfo["CFBundleIdentifier"];
 	string strBundleExe = jvInfo["CFBundleExecutable"];
 	string strBundleVersion = jvInfo["CFBundleVersion"];
+	string strBundleShortVersion = jvInfo["CFBundleShortVersionString"];
 	if (strBundleId.empty() || strBundleExe.empty()) {
 		return false;
 	}
+
+	string strVersionDisplay = strBundleShortVersion.empty()
+		? strBundleVersion
+		: strBundleShortVersion + " (" + strBundleVersion + ")";
 
 	string strInfoSHA1;
 	string strInfoSHA256;
@@ -66,6 +71,7 @@ bool ZBundle::GetSignFolderInfo(const string& strFolder, jvalue& jvNode, bool bG
 
 	jvNode["bundle_id"] = strBundleId;
 	jvNode["bundle_version"] = strBundleVersion;
+	jvNode["version_display"] = strVersionDisplay;
 	jvNode["bundle_executable"] = strBundleExe;
 	jvNode["sha1"] = strInfoSHA1;
 	jvNode["sha256"] = strInfoSHA256;
@@ -764,7 +770,7 @@ bool ZBundle::SignFolder(ZSignAsset* pSignAsset,
 	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::SIGNING_APP), ZUtil::GetBaseName(m_strAppFolder.c_str()));
 	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::APP_NAME), strAppName.c_str());
 	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::BUNDLE_ID_VALUE), jvRoot["bundle_id"].as_cstr());
-	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::VERSION), jvRoot["bundle_version"].as_cstr());
+	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::VERSION), jvRoot.has("version_display") ? jvRoot["version_display"].as_cstr() : jvRoot["bundle_version"].as_cstr());
 	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::TEAM_ID), m_pSignAsset->m_strTeamId.c_str());
 	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::SUBJECT_CN), m_pSignAsset->m_strSubjectCN.c_str());
 	ZLog::PrintV(ZL10n::GetFmt(ZL10nKeys::READ_CACHE), m_bForceSign ? ZL10n::Get(ZL10nKeys::CACHE_NO) : ZL10n::Get(ZL10nKeys::CACHE_YES));
