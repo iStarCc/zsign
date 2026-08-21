@@ -1,5 +1,4 @@
 #include "bundle.h"
-#include "base64.h"
 #include "common.h"
 #include "macho.h"
 #include "sys/stat.h"

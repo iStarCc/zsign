@@ -1,5 +1,4 @@
 #include "common.h"
-#include "base64.h"
 #include "openssl.h"
 #include <openssl/pem.h>
 #include <openssl/cms.h>
