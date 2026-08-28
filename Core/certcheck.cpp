@@ -606,43 +606,43 @@ static void PrintCertInfo(X509* cert, const string& fileTypeStr, bool showSigned
 	int daysLeft = DaysRemaining(X509_get0_notAfter(cert));
 
 	if (showSigned) {
-		ZLog::PrintV(">>> Signed:\t%s\n", isSigned ? "Yes" : "No");
+		ZLog::PrintV(">>> Signed: %s\n", isSigned ? "Yes" : "No");
 	}
-	ZLog::PrintV(">>> Name:\t%s\n", cn.c_str());
-	ZLog::PrintV(">>> Type:\t%s\n", certType.c_str());
-	if (!org.empty()) ZLog::PrintV(">>> Org:\t%s\n", org.c_str());
-	if (!ou.empty()) ZLog::PrintV(">>> Team:\t%s\n", ou.c_str());
-	ZLog::PrintV(">>> Serial:\t%s\n", serial.c_str());
-	ZLog::PrintV(">>> Issued:\t%s\n", issuedStr.c_str());
+	ZLog::PrintV(">>> Name: %s\n", cn.c_str());
+	ZLog::PrintV(">>> Type: %s\n", certType.c_str());
+	if (!org.empty()) ZLog::PrintV(">>> Org: %s\n", org.c_str());
+	if (!ou.empty()) ZLog::PrintV(">>> Team: %s\n", ou.c_str());
+	ZLog::PrintV(">>> Serial: %s\n", serial.c_str());
+	ZLog::PrintV(">>> Issued: %s\n", issuedStr.c_str());
 
 	if (daysLeft < 0) {
-		ZLog::ErrorV(">>> Expires:\t%s (EXPIRED %d days ago)\n", expiresStr.c_str(), -daysLeft);
+		ZLog::ErrorV(">>> Expires: %s (EXPIRED %d days ago)\n", expiresStr.c_str(), -daysLeft);
 	} else if (daysLeft < 30) {
-		ZLog::WarnV(">>> Expires:\t%s (%d days remaining!)\n", expiresStr.c_str(), daysLeft);
+		ZLog::WarnV(">>> Expires: %s (%d days remaining!)\n", expiresStr.c_str(), daysLeft);
 	} else {
-		ZLog::SuccessV(">>> Expires:\t%s (%d days remaining)\n", expiresStr.c_str(), daysLeft);
+		ZLog::SuccessV(">>> Expires: %s (%d days remaining)\n", expiresStr.c_str(), daysLeft);
 	}
 
-	ZLog::PrintV(">>> Algorithm:\t%s\n", keyAlgo.c_str());
-	ZLog::PrintV(">>> Issuer:\t%s\n", issuerCN.c_str());
+	ZLog::PrintV(">>> Algorithm: %s\n", keyAlgo.c_str());
+	ZLog::PrintV(">>> Issuer: %s\n", issuerCN.c_str());
 }
 
 static int PrintOCSPResult(const OCSPResult& result)
 {
 	if (result.status == "Valid") {
-		ZLog::Print(">>> OCSP:\tValid (ocsp.apple.com)\n");
+		ZLog::Print(">>> OCSP: Valid (ocsp.apple.com)\n");
 	} else if (result.status == "Revoked") {
-		ZLog::Print(">>> OCSP:\tREVOKED\n");
+		ZLog::Print(">>> OCSP: REVOKED\n");
 		if (!result.revokedTime.empty())
-			ZLog::PrintV(">>> Revoked:\t%s\n", result.revokedTime.c_str());
+			ZLog::PrintV(">>> Revoked: %s\n", result.revokedTime.c_str());
 	} else if (result.status == "Unknown") {
-		ZLog::Print(">>> OCSP:\tUnknown\n");
+		ZLog::Print(">>> OCSP: Unknown\n");
 	} else {
-		ZLog::Print(">>> OCSP:\tError\n");
+		ZLog::Print(">>> OCSP: Error\n");
 	}
 
 	if (!result.errorDetail.empty())
-		ZLog::PrintV(">>> Detail:\t%s\n", result.errorDetail.c_str());
+		ZLog::PrintV(">>> Detail: %s\n", result.errorDetail.c_str());
 
 	if (result.status == "Valid") return 0;
 	if (result.status == "Revoked") return 1;
@@ -694,17 +694,17 @@ int CheckCertificate(const string& strFilePath, const string& strPassword, bool 
 	}
 
 	if (!bSkipHeader) {
-		ZLog::PrintV("\n>>> Check:\t%s (%s)\n", strFilePath.c_str(), fileTypeStr.c_str());
+		ZLog::PrintV("\n>>> Check: %s (%s)\n", strFilePath.c_str(), fileTypeStr.c_str());
 	}
 
 	if (showSigned && !isSigned) {
-		ZLog::Print(">>> Signed:\tNo\n\n");
+		ZLog::Print(">>> Signed: No\n\n");
 		return -2;
 	}
 
 	if (!cert) {
 		if (showSigned) {
-			ZLog::Print(">>> Signed:\tNo\n\n");
+			ZLog::Print(">>> Signed: No\n\n");
 			return -2;
 		}
 		ZLog::ErrorV(">>> Failed to load certificate from %s\n", strFilePath.c_str());
@@ -722,7 +722,7 @@ int CheckCertificate(const string& strFilePath, const string& strPassword, bool 
 
 	int retCode = 0;
 	if (!issuer) {
-		ZLog::Print(">>> OCSP:\tSkipped (non-WWDR issuer)\n");
+		ZLog::Print(">>> OCSP: Skipped (non-WWDR issuer)\n");
 		retCode = expired ? 2 : 0;
 	} else {
 #ifdef _WIN32
@@ -738,7 +738,9 @@ int CheckCertificate(const string& strFilePath, const string& strPassword, bool 
 		X509_free(issuer);
 	}
 
-	ZLog::Print("\n");
+	if (!bSkipHeader) {
+		ZLog::Print("\n");
+	}
 
 	X509_free(cert);
 	if (ca) sk_X509_pop_free(ca, X509_free);
@@ -769,7 +771,7 @@ int CheckSignedBinary(const string& strAppFolder)
 	string strDisplayPath = ZUtil::GetBaseName(strAppFolder.c_str());
 	strDisplayPath += "/";
 	strDisplayPath += strExecName;
-	ZLog::PrintV("\n>>> SignCheck:\t%s (Mach-O)\n", strDisplayPath.c_str());
+	ZLog::PrintV(">>> SignCheck: %s (Mach-O)\n", strDisplayPath.c_str());
 
 	return CheckCertificate(strBinaryPath, "", true);
 }

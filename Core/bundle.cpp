@@ -311,7 +311,7 @@ bool ZBundle::SignNode(jvalue& jvNode)
 	if (jvNode.has("files")) {
 		for (size_t i = 0; i < jvNode["files"].size(); i++) {
 			string strFile = jvNode["files"][i];
-			ZLog::PrintV(">>> SignFile: \t%s\n", strFile.c_str());
+			ZLog::PrintV(">>> SignFile: %s\n", strFile.c_str());
 			ZMachO macho;
 			if (macho.InitV("%s/%s", m_strAppFolder.c_str(), strFile.c_str())) {
 				if (!macho.Sign(m_pSignAsset, m_bForceSign, "", "", "", "")) {
@@ -871,13 +871,13 @@ bool ZBundle::SignFolder(ZSignAsset* pSignAsset,
 	strAppName = ic.U82A(strAppName);
 #endif
 
-	ZLog::PrintV(">>> Signing: \t%s ...\n", ZUtil::GetBaseName(m_strAppFolder.c_str()));
-	ZLog::PrintV(">>> AppName: \t%s\n", strAppName.c_str());
-	ZLog::PrintV(">>> BundleId: \t%s\n", jvRoot["bundle_id"].as_cstr());
-	ZLog::PrintV(">>> Version: \t%s\n", jvRoot["bundle_version"].as_cstr());
-	ZLog::PrintV(">>> TeamId: \t%s\n", m_pSignAsset->m_strTeamId.c_str());
-	ZLog::PrintV(">>> SubjectCN: \t%s\n", m_pSignAsset->m_strSubjectCN.c_str());
-	ZLog::PrintV(">>> ReadCache: \t%s\n", m_bForceSign ? "NO" : "YES");
+	ZLog::PrintV(">>> Signing: %s ...\n", ZUtil::GetBaseName(m_strAppFolder.c_str()));
+	ZLog::PrintV(">>> AppName: %s\n", strAppName.c_str());
+	ZLog::PrintV(">>> BundleId: %s\n", jvRoot["bundle_id"].as_cstr());
+	ZLog::PrintV(">>> Version: %s\n", jvRoot["bundle_version"].as_cstr());
+	ZLog::PrintV(">>> TeamId: %s\n", m_pSignAsset->m_strTeamId.c_str());
+	ZLog::PrintV(">>> SubjectCN: %s\n", m_pSignAsset->m_strSubjectCN.c_str());
+	ZLog::PrintV(">>> ReadCache: %s\n", m_bForceSign ? "NO" : "YES");
 
 	if (SignNode(jvRoot)) {
 		if (bEnableCache) {

@@ -17,6 +17,7 @@ namespace {
 struct CleanupContext {
 	string displayRoot;
 	size_t removedCount;
+	vector<string> removedPaths;
 
 	explicit CleanupContext(const string& root)
 		: displayRoot(root)
@@ -38,10 +39,23 @@ struct CleanupContext {
 		return ZUtil::GetBaseName(fullPath.c_str());
 	}
 
-	void LogRemoved(const string& fullPath)
+	void RecordRemoved(const string& fullPath)
 	{
-		ZLog::PrintV(">>> Removed: %s\n", RelativeDisplayPath(displayRoot, fullPath).c_str());
+		removedPaths.push_back(RelativeDisplayPath(displayRoot, fullPath));
 		removedCount++;
+	}
+
+	void FlushLogs()
+	{
+		if (0 == removedCount) {
+			return;
+		}
+		ZLog::Print(">>> Cleaning IPA packaging junk...\n");
+		for (const string& rel : removedPaths) {
+			ZLog::PrintV(">>> Removed: %s\n", rel.c_str());
+		}
+		ZLog::PrintV(">>> Cleaned %zu item(s).\n", removedCount);
+		ZLog::Print("\n");
 	}
 };
 
@@ -97,7 +111,7 @@ static void RemoveIPAJunkInFolderRecursive(const string& strFolder, CleanupConte
 		if (bFolder) {
 			if (IsIPAJunkTopLevelDirName(fd.cFileName)) {
 				if (ZFile::RemoveFolder(strPath.c_str())) {
-					ctx.LogRemoved(strPath);
+					ctx.RecordRemoved(strPath);
 				}
 			} else {
 				RemoveIPAJunkInFolderRecursive(strPath, ctx);
@@ -105,7 +119,7 @@ static void RemoveIPAJunkInFolderRecursive(const string& strFolder, CleanupConte
 		} else {
 			if (IsIPAJunkFileName(fd.cFileName)) {
 				if (ZFile::RemoveFile(strPath.c_str())) {
-					ctx.LogRemoved(strPath);
+					ctx.RecordRemoved(strPath);
 				}
 			}
 		}
@@ -135,7 +149,7 @@ static void RemoveIPAJunkInFolderRecursive(const string& strFolder, CleanupConte
 		if (bFolder) {
 			if (IsIPAJunkTopLevelDirName(ptr->d_name)) {
 				if (ZFile::RemoveFolder(strPath.c_str())) {
-					ctx.LogRemoved(strPath);
+					ctx.RecordRemoved(strPath);
 				}
 			} else {
 				RemoveIPAJunkInFolderRecursive(strPath, ctx);
@@ -143,7 +157,7 @@ static void RemoveIPAJunkInFolderRecursive(const string& strFolder, CleanupConte
 		} else {
 			if (IsIPAJunkFileName(ptr->d_name)) {
 				if (ZFile::RemoveFile(strPath.c_str())) {
-					ctx.LogRemoved(strPath);
+					ctx.RecordRemoved(strPath);
 				}
 			}
 		}
@@ -202,12 +216,12 @@ static void RemovePathIfExists(const string& strPath, bool bFolder, CleanupConte
 {
 	if (bFolder) {
 		if (ZFile::IsFolder(strPath.c_str()) && ZFile::RemoveFolder(strPath.c_str())) {
-			ctx.LogRemoved(strPath);
+			ctx.RecordRemoved(strPath);
 		} else if (ZFile::IsFolder(strPath.c_str())) {
 			ZLog::ErrorV(">>> Failed to remove folder: %s\n", strPath.c_str());
 		}
 	} else if (ZFile::IsFileExists(strPath.c_str()) && ZFile::RemoveFile(strPath.c_str())) {
-		ctx.LogRemoved(strPath);
+		ctx.RecordRemoved(strPath);
 	} else if (ZFile::IsFileExists(strPath.c_str())) {
 		ZLog::ErrorV(">>> Failed to remove file: %s\n", strPath.c_str());
 	}
@@ -298,7 +312,6 @@ bool RemoveIPAPackagingJunkFromFolder(
 	}
 
 	CleanupContext ctx{string(szRoot)};
-	ZLog::Print(">>> Cleaning IPA packaging junk...\n");
 	RemoveIPAJunkInFolderRecursive(string(szRoot), ctx);
 
 	string appRoot;
@@ -306,10 +319,7 @@ bool RemoveIPAPackagingJunkFromFolder(
 		RemoveCustomPathsFromApp(appRoot, customRemovePaths, customRemovePathCount, ctx);
 	}
 
-	if (ctx.removedCount > 0) {
-		ZLog::PrintV(">>> Cleaned %zu item(s).\n", ctx.removedCount);
-	}
-	ZLog::Print("\n");
+	ctx.FlushLogs();
 
 	return true;
 }

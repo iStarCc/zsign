@@ -312,7 +312,7 @@ static int RunEngine(const string& strPath, const ZsignRunOptions* opts)
 		}
 
 		atimer.Reset();
-		ZLog::PrintV(">>> Signing:\t%s %s\n", strPath.c_str(), (bAdhoc ? " (Ad-hoc)" : ""));
+		ZLog::PrintV(">>> Signing: %s %s\n", strPath.c_str(), (bAdhoc ? " (Ad-hoc)" : ""));
 		string strInfoSHA1;
 		string strInfoSHA256;
 		string strCodeResourcesData;
@@ -395,6 +395,7 @@ static int RunEngine(const string& strPath, const ZsignRunOptions* opts)
 	atimer.PrintResult(bRet, ">>> Signed %s!", bRet ? "OK" : "Failed");
 
 	if (bRet && bCheckSignature && !bundle.m_strAppFolder.empty()) {
+		ZLog::Print("\n");
 		if (!VerifySignedBundle(bundle.m_strAppFolder.c_str(), !bAdhoc)) {
 			ZLog::Error(">>> Post-sign verification FAILED!\n");
 			bRet = false;
