@@ -77,7 +77,6 @@ let package = Package(
 				.headerSearchPath("bridge"),
 				.headerSearchPath("bridge/include"),
 				.headerSearchPath("bridge/i18n"),
-				.unsafeFlags(["-std=c++17"]),
 			],
 			linkerSettings: [
 				.linkedFramework("Foundation"),
@@ -94,5 +93,6 @@ let package = Package(
 			dependencies: ["ZsignSwift"],
 			path: "Tests/ZsignSwiftTests"
 		),
-	]
+	],
+	cxxLanguageStandard: .cxx17
 )
