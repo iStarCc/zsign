@@ -64,8 +64,7 @@ static ZsignRunOptions MakeIpaxRunOptions(
 	bool zh,
 	const char* outputPath,
 	const char* tempFolder,
-	int zipLevel,
-	const char* provisionPath)
+	int zipLevel)
 {
 	ZsignRunOptions opts = {};
 	opts.pkey = NsUtf8(key);
@@ -77,8 +76,8 @@ static ZsignRunOptions MakeIpaxRunOptions(
 	opts.output = outputPath ? outputPath : "";
 	opts.tempFolder = tempFolder ? tempFolder : "";
 	opts.minVersion = minOSVersion ? [minOSVersion UTF8String] : "";
-	opts.provisionPaths = provisionPath ? &provisionPath : NULL;
-	opts.provisionPathCount = provisionPath ? 1 : 0;
+	opts.provisionPaths = NULL;
+	opts.provisionPathCount = 0;
 	opts.zipLevel = zipLevel;
 	opts.adhoc = adhoc;
 	opts.force = true;
@@ -91,6 +90,22 @@ static ZsignRunOptions MakeIpaxRunOptions(
 	opts.removeUISD = removeUISupportedDevices;
 	opts.zh = zh;
 	return opts;
+}
+
+static void AttachProvisionPath(
+	ZsignRunOptions& opts,
+	const char* provisionPath,
+	const char* provisionPathEntries[1])
+{
+	if (provisionPath && *provisionPath) {
+		provisionPathEntries[0] = provisionPath;
+		opts.provisionPaths = provisionPathEntries;
+		opts.provisionPathCount = 1;
+	} else {
+		provisionPathEntries[0] = NULL;
+		opts.provisionPaths = NULL;
+		opts.provisionPathCount = 0;
+	}
 }
 
 static bool ZsignPathHasIpaExtension(NSString* ipaPath)
@@ -164,11 +179,13 @@ int zsign(
 		}
 
 		const char* provPath = NsUtf8(prov);
+		const char* provPathEntries[1] = { NULL };
 		ZsignRunOptions opts = MakeIpaxRunOptions(
 			prov, key, pass, entitlement, bundleid, displayname, bundleversion,
 			adhoc, dontGenerateEmbeddedMobileProvision, removeUISupportedDevices,
 			removeWatchApp, enableDocuments, minOSVersion, removeExtensions, zh,
-			"", "", 0, provPath && *provPath ? provPath : NULL);
+			"", "", 0);
+		AttachProvisionPath(opts, provPath, provPathEntries);
 
 		return zsignRun(NsUtf8(app), &opts, completionHandler);
 	}
@@ -211,13 +228,14 @@ int zsignIPA(
 		}
 
 		const char* provPath = NsUtf8(prov);
+		const char* provPathEntries[1] = { NULL };
 		int zl = (zipLevel >= 0 && zipLevel <= 9) ? zipLevel : 6;
 		ZsignRunOptions opts = MakeIpaxRunOptions(
 			prov, key, pass, entitlement, bundleid, displayname, bundleversion,
 			adhoc, dontGenerateEmbeddedMobileProvision, removeUISupportedDevices,
 			removeWatchApp, enableDocuments, minOSVersion, removeExtensions, zh,
-			NsUtf8(outputPath), NsUtf8(tempFolder), zl,
-			provPath && *provPath ? provPath : NULL);
+			NsUtf8(outputPath), NsUtf8(tempFolder), zl);
+		AttachProvisionPath(opts, provPath, provPathEntries);
 
 		return zsignRun(NsUtf8(inputPath), &opts, completionHandler);
 	}
