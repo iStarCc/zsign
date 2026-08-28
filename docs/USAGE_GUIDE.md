@@ -636,7 +636,7 @@ let ok = Zsign.signIPA(
 | `swift` | `ZsignSwift` | 通用集成；CLI 对齐 `Zsign.run` |
 | `ipax-bridge` | `ZsignIPAX` | IPAX 等需要 zsign-ipax 兼容 API 的 App |
 
-semver 标签（如 `0.5.1`）指向 **`swift` 分支**快照；IPAX 请跟踪 **`ipax-bridge` 分支**。
+semver 标签（如 `0.5.2`）指向 **`swift` 分支**快照；IPAX 请跟踪 **`ipax-bridge` 分支**。
 
 ---
 
@@ -661,5 +661,5 @@ swift test
 
 **创建日期**: 2026-08-26  
 **最后更新**: 2026-08-28  
-**版本**: v0.5.1  
+**版本**: v0.5.2  
 **状态**: 已完成
