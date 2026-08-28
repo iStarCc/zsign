@@ -469,3 +469,159 @@ bool Zip::ExtractWithProgress(const char* zip_file, const char* output_folder)
 	}
 	return true;
 }
+
+bool Zip::ArchivePayloadFolderForIPA(const string& strPayloadFolder, const string& strZipFile, int nZipLevel)
+{
+	if (nZipLevel < 0 || nZipLevel > 9) {
+		ZLog::ErrorV(">>> Zip: Invalid compression level: %d\n", nZipLevel);
+		return false;
+	}
+
+	zipFile zf = zipOpen64(strZipFile.c_str(), 0);
+	if (!zf) {
+		ZLog::ErrorV(">>> Zip: Failed to create zip file: %s\n", strZipFile.c_str());
+		return false;
+	}
+
+	string strFolder = strPayloadFolder;
+	while (!strFolder.empty() && (strFolder.back() == '/' || strFolder.back() == '\\')) {
+		strFolder.pop_back();
+	}
+
+	const size_t nTotalEntries = ZipArchiveEntryCount(strFolder);
+	int nDone = 0;
+
+	bool bRet = true;
+	ZFile::EnumFolder(strFolder.c_str(), true, NULL, [&](bool bFolder, const string& strPath) {
+		if (ZipIsCancelRequested()) {
+			ZipMarkStoppedByUserCancel();
+			ZLog::Print(">>> Zip: archive cancelled (between entries).\n");
+			bRet = false;
+			return true;
+		}
+		string strRelativePath = strPath.substr(strFolder.size() + 1);
+		ZUtil::StringReplace(strRelativePath, "\\", "/");
+		strRelativePath = "Payload/" + strRelativePath;
+
+#ifdef _WIN32
+		iconv ic;
+		strRelativePath = ic.A2U8(strRelativePath);
+#endif
+
+		if (bFolder) {
+			strRelativePath += "/";
+			if (!_CreateFolderToZip(zf, strPath, strRelativePath, nZipLevel)) {
+				bRet = false;
+				return true;
+			}
+			nDone++;
+			if (nTotalEntries > 0)
+				ZipLogCompressUnified(nDone, (int)nTotalEntries, strRelativePath, 0, 0, false);
+		} else {
+			if (!_WriteFileToZip(zf, strPath, strRelativePath, nZipLevel, nDone, (int)nTotalEntries)) {
+				bRet = false;
+				return true;
+			}
+			nDone++;
+			uint64_t dmb = 0, tmb = 0;
+			zipStatFileMb(strPath, &dmb, &tmb);
+			if (nTotalEntries > 0)
+				ZipLogCompressUnified(nDone, (int)nTotalEntries, strRelativePath, dmb, tmb, false);
+		}
+		return false;
+	});
+
+	zipClose(zf, NULL);
+	return bRet;
+}
+
+static bool PathLooksLikePayloadApp(string strPath)
+{
+	ZUtil::StringReplace(strPath, "\\", "/");
+	while (!strPath.empty() && (strPath.back() == '/' || strPath.back() == '\\')) {
+		strPath.pop_back();
+	}
+	if (strPath.size() < 9) {
+		return false;
+	}
+#if defined(_WIN32)
+	if (_strnicmp(strPath.c_str(), "Payload/", 8) != 0) {
+		return false;
+	}
+#else
+	if (strncasecmp(strPath.c_str(), "Payload/", 8) != 0) {
+		return false;
+	}
+#endif
+	const char* rest = strPath.c_str() + 8;
+	if (*rest == '\0') {
+		return false;
+	}
+	const char* slash = strchr(rest, '/');
+	size_t segLen = slash ? (size_t)(slash - rest) : strlen(rest);
+	if (segLen < 5) {
+		return false;
+	}
+	const char* seg = rest;
+#if defined(_WIN32)
+	return _strnicmp(seg + segLen - 4, ".app", 4) == 0;
+#else
+	return strncasecmp(seg + segLen - 4, ".app", 4) == 0;
+#endif
+}
+
+bool Zip::HasIpaLayout(const char* zip_file)
+{
+	unzFile uf = unzOpen64(zip_file);
+	if (NULL == uf) {
+		return false;
+	}
+
+	unz_global_info64 gi;
+	if (UNZ_OK != unzGetGlobalInfo64(uf, &gi)) {
+		unzClose(uf);
+		return false;
+	}
+
+	unz_file_info64 fi = { 0 };
+	char szPath[PATH_MAX] = { 0 };
+	for (uint64_t i = 0; i < gi.number_entry; i++) {
+		if (UNZ_OK != unzGetCurrentFileInfo64(uf, &fi, szPath, PATH_MAX, NULL, 0, NULL, 0)) {
+			unzClose(uf);
+			return false;
+		}
+
+		string strPath = szPath;
+		ZUtil::StringTrim(strPath);
+
+#ifdef _WIN32
+		iconv ic;
+		strPath = ic.U82A(strPath);
+#endif
+
+		if (PathLooksLikePayloadApp(strPath)) {
+			unzClose(uf);
+			return true;
+		}
+
+		if (i < gi.number_entry - 1) {
+			if (UNZ_OK != unzGoToNextFile(uf)) {
+				unzClose(uf);
+				return false;
+			}
+		}
+	}
+
+	unzClose(uf);
+	return false;
+}
+
+bool Zip::ExtractWithProgressIntoExisting(const char* zip_file, const char* output_folder)
+{
+	if (!ZFile::IsFolder(output_folder)) {
+		if (!ZFile::CreateFolder(output_folder)) {
+			return false;
+		}
+	}
+	return _ExtractImpl(zip_file, output_folder, true);
+}

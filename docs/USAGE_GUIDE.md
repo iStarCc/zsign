@@ -113,13 +113,31 @@ print(Zsign.helpText())      // 与 CLI -h 相同文本
 
 ## 公开 API
 
-`ZsignSwift` 模块仅暴露以下接口（**不提供** zsign-ipax 的 `sign` / `signIPA` / Mach-O 细粒度 API）。
+`ZsignSwift` 在 **`Zsign.run`**（CLI 对齐）之外，提供与 **zsign-ipax** 兼容的细粒度 API，供 IPAX 等业务 App 直接调用。
+
+### CLI 对齐 API
 
 ### `Zsign.version`
 
 - **类型**：`String`
 - **对应 CLI**：`-v` / `--version`
 - **说明**：编译期嵌入的版本字符串
+
+### zsign-ipax 兼容 API（IPAX 迁移）
+
+| API | 说明 |
+|-----|------|
+| `Zsign.sign(...)` | 签名 `.app`；内部 `check=true`、`force=true` |
+| `Zsign.signIPA(...)` | 签名并输出 IPA |
+| `Zsign.archiveFolderToIPA(...)` | 仅打包 `Payload` 目录 |
+| `Zsign.extractIPA(...)` | 解压 `.ipa` |
+| `Zsign.checkSigned(appExecutable:)` | Mach-O 是否已签名 |
+| `Zsign.injectDyLib` / `removeDylibs` / `listDylibs` / `changeDylibPath` | Mach-O dylib 操作 |
+| `Zsign.checkRevokage(...)` | P12 + 描述文件 OCSP 检查（异步） |
+| `Zsign.requestZipArchiveCancel()` | `requestZipCancel()` 别名 |
+| `Zsign.zipArchiveLastFailureWasUserCancel()` | `zipLastFailureWasUserCancel()` 别名 |
+
+`sign` / `signIPA` 与 ipax 一样支持 `zh:`、`logHandler`、`completion`；签后校验比旧 ipax 多跑 `CheckSignedBinary`（OCSP 日志）。
 
 ### `Zsign.helpText(zh:)`
 

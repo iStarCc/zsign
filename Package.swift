@@ -66,6 +66,11 @@ let package = Package(
 				"Core/common/timer.cpp",
 				"Core/common/util.cpp",
 				"bridge/zsign.mm",
+				"bridge/macho_api.mm",
+				"bridge/ipax_compat.mm",
+				"bridge/check_cert.mm",
+				"bridge/check_cert_loader.cpp",
+				"bridge/macho_dylib_overlay.cpp",
 			],
 			publicHeadersPath: "bridge/include",
 			cxxSettings: [
