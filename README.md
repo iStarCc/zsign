@@ -2,7 +2,8 @@
 
 基于 [zsign](https://github.com/zhlynn/zsign) master（`614caa8`）的 Swift Package，为 iOS / macOS 应用提供 IPA 重签名能力。公开 API 与 zsign CLI 选项对齐，并通过 `bridge/` overlay 扩展中文日志、压缩/解压进度、用户取消与签名前文件清理等能力。
 
-> 本目录对应仓库 **`swift` 分支**，与 `master` 分支的 CLI 源码并列维护。
+> 本目录对应仓库 **`swift` 分支**，与 `master` 分支的 CLI 源码并列维护。  
+> **IPAX / zsign-ipax 兼容 API**（`sign`、`signIPA`、Mach-O、`checkRevokage` 等）在 **`ipax-bridge` 分支** 的 **`ZsignIPAX`** 产品中，不在 `swift` 分支的 `ZsignSwift` 内。
 
 ## 功能特性
 
@@ -45,6 +46,19 @@ targets: [
 
 Xcode：**File → Add Package Dependencies** → `https://github.com/iStarCc/zsign.git`，选择 **`swift`** 分支。
 
+### IPAX / zsign-ipax 兼容 API
+
+业务 App 若需 `Zsign.sign` / `signIPA` / Mach-O / `checkRevokage` 等，请依赖 **`ipax-bridge`** 分支，产品名 **`ZsignIPAX`**：
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/iStarCc/zsign.git", branch: "ipax-bridge"),
+],
+// .product(name: "ZsignIPAX", package: "Zsign")
+```
+
+详见 [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md#ipax-兼容-apiipax-bridge-分支)。
+
 ### 导入
 
 ```swift
@@ -86,6 +100,8 @@ if code == 0 {
 | `Zsign.requestZipCancel()` | 请求取消当前解压 / 打包 |
 | `Zsign.zipLastFailureWasUserCancel()` | 上一轮失败是否为用户取消 |
 | `ZsignVerifySignedBundle(_:bCheckCMS:)` | 对已签 `.app` 做 CodeDirectory + CMS 校验（C API，测试/高级用法） |
+
+> `ZsignSwift` **不提供** zsign-ipax 细粒度 API；见 **`ipax-bridge` → `ZsignIPAX`**。
 
 `removePaths` 规则：
 

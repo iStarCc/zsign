@@ -113,7 +113,9 @@ print(Zsign.helpText())      // 与 CLI -h 相同文本
 
 ## 公开 API
 
-`ZsignSwift` 在 **`Zsign.run`**（CLI 对齐）之外，提供与 **zsign-ipax** 兼容的细粒度 API，供 IPAX 等业务 App 直接调用。
+**`swift` 分支的 `ZsignSwift` 仅提供与 CLI 对齐的公开 API**（`Zsign.run` 及版本、帮助、日志、取消等），**不包含** zsign-ipax 风格的高层细粒度 API。
+
+若业务 App（如 IPAX）需要 `sign` / `signIPA` / Mach-O / `checkRevokage` 等兼容 API，请使用 **`ipax-bridge` 分支** 的 **`ZsignIPAX`** 产品，见下文 [IPAX 兼容 API（ipax-bridge 分支）](#ipax-兼容-apiipax-bridge-分支)。
 
 ### CLI 对齐 API
 
@@ -123,29 +125,13 @@ print(Zsign.helpText())      // 与 CLI -h 相同文本
 - **对应 CLI**：`-v` / `--version`
 - **说明**：编译期嵌入的版本字符串
 
-### zsign-ipax 兼容 API（IPAX 迁移）
-
-| API | 说明 |
-|-----|------|
-| `Zsign.sign(...)` | 签名 `.app`；内部 `check=true`、`force=true` |
-| `Zsign.signIPA(...)` | 签名并输出 IPA |
-| `Zsign.archiveFolderToIPA(...)` | 仅打包 `Payload` 目录 |
-| `Zsign.extractIPA(...)` | 解压 `.ipa` |
-| `Zsign.checkSigned(appExecutable:)` | Mach-O 是否已签名 |
-| `Zsign.injectDyLib` / `removeDylibs` / `listDylibs` / `changeDylibPath` | Mach-O dylib 操作 |
-| `Zsign.checkRevokage(...)` | P12 + 描述文件 OCSP 检查（异步） |
-| `Zsign.requestZipArchiveCancel()` | `requestZipCancel()` 别名 |
-| `Zsign.zipArchiveLastFailureWasUserCancel()` | `zipLastFailureWasUserCancel()` 别名 |
-
-`sign` / `signIPA` 与 ipax 一样支持 `zh:`、`logHandler`、`completion`；签后校验比旧 ipax 多跑 `CheckSignedBinary`（OCSP 日志）。
-
 ### `Zsign.helpText(zh:)`
 
 - **类型**：`(zh: Bool = false) -> String`
 - **对应 CLI**：`-h` / `--help`
 - **说明**：返回帮助文本；`zh: true` 时临时设置 `ZSIGN_LANG=zh` 后返回中文；否则若系统 `LANG=zh*` 也会自动中文
 
-### 中文日志（与 zsign-ipax 一致）
+### 中文日志
 
 实现位于 `bridge/log_overlay.cpp` + `bridge/i18n/zlog_i18n.cpp`，**不修改** `Core/`。
 
@@ -183,7 +169,7 @@ print(Zsign.helpText(zh: true))
 | `Zsign.requestZipCancel()` | 请求取消当前 IPA **压缩或解压** |
 | `Zsign.zipLastFailureWasUserCancel()` | 上一轮压缩/解压失败是否因用户取消 |
 
-**进度日志**（经 `logHandler` / stdout 输出，格式与 zsign-ipax 一致）：
+**进度日志**（经 `logHandler` / stdout 输出）：
 
 - 压缩：`Compressing files (3/120): Foo.app/Info.plist (1/2 MB) overall (42%)`  
   中文：`正在压缩（3/120）： Info.plist（1/2 MB）总计（42%）`
@@ -276,7 +262,7 @@ static func run(
 
 ### `removePaths`（签名前清理 IPA 中多余无效文件）
 
-实现位于 `bridge/fs_ipa_junk.*`，**不修改** `Core/common/fs.*`。在 `SignFolder` 前自动执行（与 zsign-ipax RunEngine 一致），不在打包输出 IPA 前二次清理。
+实现位于 `bridge/fs_ipa_junk.*`，**不修改** `Core/common/fs.*`。在 `SignFolder` 前自动执行，不在打包输出 IPA 前二次清理。
 
 **日志**（`zh: true` 或系统 `LANG=zh*` 时为中文）：
 
@@ -584,11 +570,73 @@ Zsign.run(inputPath: "input.ipa", options: o)
 | 主流程 | `main()` | `Zsign.run()` → `zsignRun()` |
 | 版本 / 帮助 | `-v` / `-h` | `version` / `helpText()` |
 | 默认 SHA256 | `-2` 默认开启 | `sha256Only = true` |
-| 细粒度 API | 无 | ** intentionally 不提供**（见待办文档） |
-| 中文日志 | zlog_i18n | `run(zh:)` + `bridge/i18n`（格式同 ipax） |
-| IPA 多余文件清理 | zsign-ipax `fs.cpp` | `removePaths` + `bridge/fs_ipa_junk.*` |
-| 签后 CMS 校验 | zsign-ipax `bundle.cpp` | `check` + `bridge/verify_signed_bundle.*` |
-| IPAX 其他增强 | 细粒度 Swift API 等 | 部分未实现（见 PENDING_IPAX_FEATURES.md） |
+| 细粒度 API（sign/signIPA/Mach-O 等） | 无 | **`ipax-bridge` 分支 `ZsignIPAX`** |
+| 中文日志 | zlog_i18n | `run(zh:)` + `bridge/i18n` |
+| IPA 多余文件清理 | — | `removePaths` + `bridge/fs_ipa_junk.*` |
+| 签后 CMS 校验 | — | `check` + `bridge/verify_signed_bundle.*` |
+
+---
+
+## IPAX 兼容 API（`ipax-bridge` 分支）
+
+`ipax-bridge` 在 **`swift` 分支同一套 zsign 核心** 之上，额外提供 **`ZsignIPAX`** 库（ObjC++ bridge + Swift 封装），API 与历史 **zsign-ipax** 对齐，供 IPAX 等业务 App 直接调用。
+
+### 集成
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/iStarCc/zsign.git", branch: "ipax-bridge"),
+],
+targets: [
+    .target(
+        name: "YourApp",
+        dependencies: [
+            .product(name: "ZsignIPAX", package: "Zsign"),
+        ]
+    ),
+]
+```
+
+```swift
+import ZsignIPAX
+
+let ok = Zsign.signIPA(
+    inputPath: ipaPath,
+    outputPath: outPath,
+    provisionPath: provPath,
+    p12Path: p12Path,
+    p12Password: password,
+    zh: true,
+    logHandler: { print($0, terminator: "") }
+)
+```
+
+> **维护说明**：`swift` 分支 Core/bridge 有更新时，请将变更 merge 进 `ipax-bridge`，保持 IPAX API 与核心同步。
+
+### API 一览
+
+| API | 说明 |
+|-----|------|
+| `Zsign.sign(...)` | 签名 `.app`；内部 `check=true`、`force=true` |
+| `Zsign.signIPA(...)` | 签名并输出 IPA |
+| `Zsign.archiveFolderToIPA(...)` | 仅打包 `Payload` 目录 |
+| `Zsign.extractIPA(...)` | 解压 `.ipa` |
+| `Zsign.checkSigned(appExecutable:)` | Mach-O 是否已签名 |
+| `Zsign.injectDyLib` / `removeDylibs` / `listDylibs` / `changeDylibPath` | Mach-O dylib 操作 |
+| `Zsign.checkRevokage(...)` | P12 + 描述文件 OCSP 检查（异步） |
+| `Zsign.requestZipArchiveCancel()` | `requestZipCancel()` 别名 |
+| `Zsign.zipArchiveLastFailureWasUserCancel()` | 取消结果别名 |
+
+`sign` / `signIPA` 支持 `zh:`、`logHandler`、`completion`；签后校验在 `check=true` 时执行 CodeDirectory + CMS 结构校验及证书检查。
+
+### 分支对照
+
+| 分支 | SPM 产品 | 适用场景 |
+|------|----------|----------|
+| `swift` | `ZsignSwift` | 通用集成；CLI 对齐 `Zsign.run` |
+| `ipax-bridge` | `ZsignIPAX` | IPAX 等需要 zsign-ipax 兼容 API 的 App |
+
+semver 标签（如 `0.5.1`）指向 **`swift` 分支**快照；IPAX 请跟踪 **`ipax-bridge` 分支**。
 
 ---
 
@@ -597,7 +645,6 @@ Zsign.run(inputPath: "input.ipa", options: o)
 | 文档 | 说明 |
 |------|------|
 | [CORE_MODIFICATIONS.md](../CORE_MODIFICATIONS.md) | Core 相对 master 的修改；日志 i18n 在 bridge overlay |
-| [PENDING_IPAX_FEATURES.md](../PENDING_IPAX_FEATURES.md) | 尚未实现的 IPAX / 细粒度 API |
 | [master/src/zsign.cpp](../../master/src/zsign.cpp) | CLI 参考实现 |
 
 ---
@@ -613,5 +660,6 @@ swift test
 ---
 
 **创建日期**: 2026-08-26  
-**版本**: v0.1.0  
+**最后更新**: 2026-08-28  
+**版本**: v0.5.1  
 **状态**: 已完成
