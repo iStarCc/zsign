@@ -326,6 +326,7 @@ static const char* gPairs[][2] = {
 	{"Cannot read file: ", "无法读取文件："},
 	{"Unknown file type: ", "未知文件类型："},
 	{"Check:\t", "检查：\t"},
+	{"SignCheck:\t", "签名检查：\t"},
 	{"Failed to load certificate from ", "从以下路径加载证书失败："},
 	{"OCSP:\tSkipped (non-WWDR issuer)\n", "OCSP：\t已跳过（非 WWDR 颁发者）\n"},
 

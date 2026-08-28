@@ -289,7 +289,7 @@ Zsign.run(inputPath: ipaPath, options: options)
 - **`legacySHA1 == true`**：底层 `bSHA256Only = false`，与 CLI `-L` 一致
 - **输入为 `.ipa`**：内部自动 `force = true`、禁用签名缓存、解压到临时目录（与 CLI 相同）
 - **`-C` 且无 `pkey`/`provisionPaths`**：仅执行 `CheckCertificate`，不签名
-- **签名流程中 `-C`**：签名成功后额外 `CheckSignedBinary`
+- **签名流程中 `-C`**：签名成功后先执行 `VerifySignedBundle`（CodeDirectory + CMS 结构校验），再执行 `CheckSignedBinary`（OCSP/证书检查）
 - **`-x`**：在归档成功且指定 `output` 后提取元数据
 
 ---
@@ -398,6 +398,24 @@ options.password = "p12密码"  // 检查 p12 时需要
 let code = Zsign.run(inputPath: "/path/to/file.p12", options: options)
 // CheckCertificate 返回码：0 有效，1 吊销，2 过期，-2 未签名，-1 错误
 ```
+
+### 7b. 签名并开启 check（-C）：签后 CMS 校验 + OCSP
+
+```swift
+var options = ZsignOptions()
+options.check = true
+options.pkey = "/path/to/key.p12"
+options.password = "secret"
+options.provisionPaths = ["/path/to/profile.mobileprovision"]
+options.output = "/path/to/signed.ipa"
+
+Zsign.run(inputPath: "/path/to/input.ipa", options: options, zh: true)
+// 签名成功后日志示例（中文）：
+// ➤ 校验所有 Mach-O 嵌入签名（共 N 个）...
+// ➤ 主程序嵌入签名完整性校验通过：EasyTier
+```
+
+签后校验由 `bridge/verify_signed_bundle.*` 实现；Ad-hoc 签名时不强制 CMS blob，仍校验 CodeDirectory。
 
 ### 8. 签名后检查 + 导出元数据
 
@@ -551,7 +569,8 @@ Zsign.run(inputPath: "input.ipa", options: o)
 | 细粒度 API | 无 | ** intentionally 不提供**（见待办文档） |
 | 中文日志 | zlog_i18n | `run(zh:)` + `bridge/i18n`（格式同 ipax） |
 | IPA 多余文件清理 | zsign-ipax `fs.cpp` | `removePaths` + `bridge/fs_ipa_junk.*` |
-| IPAX 其他增强 | VerifySignedBundle 等 | 部分未实现（见 PENDING_IPAX_FEATURES.md） |
+| 签后 CMS 校验 | zsign-ipax `bundle.cpp` | `check` + `bridge/verify_signed_bundle.*` |
+| IPAX 其他增强 | 细粒度 Swift API 等 | 部分未实现（见 PENDING_IPAX_FEATURES.md） |
 
 ---
 

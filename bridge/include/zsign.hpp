@@ -73,6 +73,8 @@ bool ZsignRemoveIPAPackagingJunkFromFolder(
 	const char* _Nullable const* _Nullable removePaths,
 	size_t removePathCount);
 
+bool ZsignVerifySignedBundle(const char* _Nonnull appFolder, bool bCheckCMS);
+
 NS_ASSUME_NONNULL_END
 
 #ifdef __cplusplus

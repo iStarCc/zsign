@@ -13,6 +13,7 @@
 #include "timer.h"
 #include "archive_overlay.h"
 #include "fs_ipa_junk.h"
+#include "verify_signed_bundle.h"
 #include "metadata.h"
 #include "certcheck.h"
 
@@ -394,7 +395,13 @@ static int RunEngine(const string& strPath, const ZsignRunOptions* opts)
 	atimer.PrintResult(bRet, ">>> Signed %s!", bRet ? "OK" : "Failed");
 
 	if (bRet && bCheckSignature && !bundle.m_strAppFolder.empty()) {
-		CheckSignedBinary(bundle.m_strAppFolder);
+		if (!VerifySignedBundle(bundle.m_strAppFolder.c_str(), !bAdhoc)) {
+			ZLog::Error(">>> Post-sign verification FAILED!\n");
+			bRet = false;
+		}
+		if (bRet) {
+			CheckSignedBinary(bundle.m_strAppFolder);
+		}
 	}
 
 	if (bRet && !strOutputFile.empty()) {
@@ -499,6 +506,11 @@ bool ZsignRemoveIPAPackagingJunkFromFolder(
 	size_t removePathCount)
 {
 	return RemoveIPAPackagingJunkFromFolder(szRoot, removePaths, removePathCount) ? true : false;
+}
+
+bool ZsignVerifySignedBundle(const char* appFolder, bool bCheckCMS)
+{
+	return VerifySignedBundle(appFolder, bCheckCMS) ? true : false;
 }
 
 int zsignRun(

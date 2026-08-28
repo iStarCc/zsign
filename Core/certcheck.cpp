@@ -651,7 +651,7 @@ static int PrintOCSPResult(const OCSPResult& result)
 
 // --- main entry -----------------------------------------------------
 
-int CheckCertificate(const string& strFilePath, const string& strPassword)
+int CheckCertificate(const string& strFilePath, const string& strPassword, bool bSkipHeader)
 {
 	string data;
 	if (!ZFile::ReadFile(strFilePath.c_str(), data) || data.empty()) {
@@ -693,7 +693,9 @@ int CheckCertificate(const string& strFilePath, const string& strPassword)
 		return -1;
 	}
 
-	ZLog::PrintV("\n>>> Check:\t%s (%s)\n", strFilePath.c_str(), fileTypeStr.c_str());
+	if (!bSkipHeader) {
+		ZLog::PrintV("\n>>> Check:\t%s (%s)\n", strFilePath.c_str(), fileTypeStr.c_str());
+	}
 
 	if (showSigned && !isSigned) {
 		ZLog::Print(">>> Signed:\tNo\n\n");
@@ -764,5 +766,10 @@ int CheckSignedBinary(const string& strAppFolder)
 	if (strBinaryPath.back() != '/') strBinaryPath += '/';
 	strBinaryPath += strExecName;
 
-	return CheckCertificate(strBinaryPath, "");
+	string strDisplayPath = ZUtil::GetBaseName(strAppFolder.c_str());
+	strDisplayPath += "/";
+	strDisplayPath += strExecName;
+	ZLog::PrintV("\n>>> SignCheck:\t%s (Mach-O)\n", strDisplayPath.c_str());
+
+	return CheckCertificate(strBinaryPath, "", true);
 }

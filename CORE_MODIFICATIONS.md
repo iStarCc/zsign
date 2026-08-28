@@ -69,6 +69,16 @@ appendBE32(kZSignSecDesignatedRequirementType); // type = 3
 | [`bridge/archive_zip_progress.cpp`](bridge/archive_zip_progress.cpp) | `ZipLogCompressUnified` / `ZipLogExtractUnified` |
 | [`bridge/archive_cancel.cpp`](bridge/archive_cancel.cpp) | `ZipBeginZipOperation` / `ZipRequestCancel` / `ZipLastFailureWasUserCancel` |
 | [`bridge/fs_ipa_junk.cpp`](bridge/fs_ipa_junk.cpp) | 签名前清理 IPA 多余无效文件 + `ZsignOptions.removePaths` 自定义项 |
+| [`bridge/verify_archo.cpp`](bridge/verify_archo.cpp) | CodeDirectory page hash 校验（基于 `ZArchO` public 字段） |
+| [`bridge/verify_macho_map.cpp`](bridge/verify_macho_map.cpp) | 轻量 Mach-O 映射加载（不修改 Core `macho.cpp`） |
+| [`bridge/verify_signed_bundle.cpp`](bridge/verify_signed_bundle.cpp) | 签后 CMS / CodeDirectory 完整性校验（`check == true` 时触发） |
+
+### verify overlay 相对 zsign-ipax 的增强（均在 bridge，Core 不动）
+
+- `VerifySignedBundle`：枚举 `.app` 内 Mach-O → 校验 code slots → 校验主程序 embedded signature（含 CMS blob 结构）
+- 触发时机：**仅** `ZsignOptions.check == true`（CLI `-C`），与 ipax「始终校验」不同
+- Ad-hoc 签名：`bCheckCMS = false`，仍校验 CodeDirectory / code slots
+- Swift 测试 API：`ZsignVerifySignedBundle(appFolder, bCheckCMS)`
 
 ### fs_ipa_junk overlay 相对 zsign-ipax `fs.cpp` 的增强（均在 bridge，Core 不动）
 
