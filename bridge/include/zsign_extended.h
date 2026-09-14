@@ -19,8 +19,8 @@ typedef struct {
 void ZsignZipBeginOperation(void);
 
 int ZsignArchivePayloadDirectoryToIPA(
-	const char* _Nonnull payloadFolderUTF8,
-	const char* _Nonnull outputPathUTF8,
+	NSString* _Nonnull payloadFolder,
+	NSString* _Nonnull outputPath,
 	int zipLevel,
 	void (^ _Nullable completionHandler)(BOOL success, NSError* _Nullable error));
 

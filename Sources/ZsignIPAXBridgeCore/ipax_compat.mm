@@ -214,10 +214,9 @@ int zsignArchiveFolderToIPA(
 			return -1;
 		}
 
-		NSString* standardized = [folderPath stringByStandardizingPath];
 		return ZsignArchivePayloadDirectoryToIPA(
-			[standardized UTF8String],
-			NsUtf8(outputPath),
+			[folderPath stringByStandardizingPath],
+			outputPath,
 			zipLevel,
 			completionHandler);
 	}

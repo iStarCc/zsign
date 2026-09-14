@@ -60,58 +60,56 @@ static bool RenameExistingPayloadIfNeeded(const char* outDirUTF8)
 	}
 }
 
-static bool ValidatePayloadFolder(const char* payloadFolderUTF8, NSString** standardizedOut)
+static bool ValidatePayloadFolder(NSString* payloadFolder, NSString** standardizedOut)
 {
-	if (!payloadFolderUTF8 || !*payloadFolderUTF8) {
+	if (!payloadFolder || payloadFolder.length == 0) {
 		ZLog::Error(">>> Archive: folder path is required.\n");
 		return false;
 	}
 
-	@autoreleasepool {
-		NSString* standardized = [[NSString stringWithUTF8String:payloadFolderUTF8] stringByStandardizingPath];
-		BOOL isDir = NO;
-		NSFileManager* fm = [NSFileManager defaultManager];
-		if (![fm fileExistsAtPath:standardized isDirectory:&isDir] || !isDir) {
-			ZLog::ErrorV(">>> Archive: invalid folder: %s\n", [standardized UTF8String]);
-			return false;
-		}
-		if ([[standardized lastPathComponent] compare:@"Payload" options:NSCaseInsensitiveSearch] != NSOrderedSame) {
-			ZLog::Error(">>> Archive: path must be the Payload directory (…/Payload).\n");
-			return false;
-		}
-
-		NSError* enumErr = nil;
-		NSArray<NSString*>* contents = [fm contentsOfDirectoryAtPath:standardized error:&enumErr];
-		if (!contents) {
-			ZLog::ErrorV(">>> Archive: cannot list Payload: %s\n", enumErr ? [[enumErr localizedDescription] UTF8String] : "unknown");
-			return false;
-		}
-
-		NSUInteger appCount = 0;
-		for (NSString* name in contents) {
-			if ([[name pathExtension] compare:@"app" options:NSCaseInsensitiveSearch] != NSOrderedSame) {
-				continue;
-			}
-			NSString* full = [standardized stringByAppendingPathComponent:name];
-			isDir = NO;
-			if ([fm fileExistsAtPath:full isDirectory:&isDir] && isDir) {
-				appCount++;
-			}
-		}
-		if (appCount == 0) {
-			ZLog::Error(">>> Archive: Payload must contain exactly one .app bundle (none found).\n");
-			return false;
-		}
-		if (appCount > 1) {
-			ZLog::Error(">>> Archive: Payload must contain exactly one .app bundle (multiple .app found).\n");
-			return false;
-		}
-
-		if (standardizedOut) {
-			*standardizedOut = [standardized copy];
-		}
-		return true;
+	NSString* standardized = [payloadFolder stringByStandardizingPath];
+	BOOL isDir = NO;
+	NSFileManager* fm = [NSFileManager defaultManager];
+	if (!standardized || ![fm fileExistsAtPath:standardized isDirectory:&isDir] || !isDir) {
+		ZLog::ErrorV(">>> Archive: invalid folder: %s\n", standardized.UTF8String ?: "(null)");
+		return false;
 	}
+	if ([[standardized lastPathComponent] compare:@"Payload" options:NSCaseInsensitiveSearch] != NSOrderedSame) {
+		ZLog::Error(">>> Archive: path must be the Payload directory (…/Payload).\n");
+		return false;
+	}
+
+	NSError* enumErr = nil;
+	NSArray<NSString*>* contents = [fm contentsOfDirectoryAtPath:standardized error:&enumErr];
+	if (!contents) {
+		ZLog::ErrorV(">>> Archive: cannot list Payload: %s\n", enumErr.localizedDescription.UTF8String ?: "unknown");
+		return false;
+	}
+
+	NSUInteger appCount = 0;
+	for (NSString* name in contents) {
+		if ([[name pathExtension] compare:@"app" options:NSCaseInsensitiveSearch] != NSOrderedSame) {
+			continue;
+		}
+		NSString* full = [standardized stringByAppendingPathComponent:name];
+		isDir = NO;
+		if ([fm fileExistsAtPath:full isDirectory:&isDir] && isDir) {
+			appCount++;
+		}
+	}
+	if (appCount == 0) {
+		ZLog::Error(">>> Archive: Payload must contain exactly one .app bundle (none found).\n");
+		return false;
+	}
+	if (appCount > 1) {
+		ZLog::Error(">>> Archive: Payload must contain exactly one .app bundle (multiple .app found).\n");
+		return false;
+	}
+
+	if (standardizedOut) {
+		*standardizedOut = standardized;
+	}
+	return true;
 }
 
 } // namespace
@@ -124,8 +122,8 @@ void ZsignZipBeginOperation(void)
 }
 
 int ZsignArchivePayloadDirectoryToIPA(
-	const char* payloadFolderUTF8,
-	const char* outputPathUTF8,
+	NSString* payloadFolder,
+	NSString* outputPath,
 	int zipLevel,
 	void (^completionHandler)(BOOL success, NSError* error))
 {
@@ -134,7 +132,7 @@ int ZsignArchivePayloadDirectoryToIPA(
 
 	int nZipLevel = (zipLevel >= 0 && zipLevel <= 9) ? zipLevel : 6;
 
-	if (!outputPathUTF8 || !*outputPathUTF8) {
+	if (!outputPath || outputPath.length == 0) {
 		ZLog::Error(">>> Archive: output path is required.\n");
 		if (completionHandler) {
 			completionHandler(NO, [NSError errorWithDomain:@"Zsign" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"Output path is required"}]);
@@ -143,15 +141,15 @@ int ZsignArchivePayloadDirectoryToIPA(
 	}
 
 	NSString* standardized = nil;
-	if (!ValidatePayloadFolder(payloadFolderUTF8, &standardized)) {
+	if (!ValidatePayloadFolder(payloadFolder, &standardized)) {
 		if (completionHandler) {
 			completionHandler(NO, [NSError errorWithDomain:@"Zsign" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"Invalid Payload folder"}]);
 		}
 		return -1;
 	}
 
-	string strPayloadFolder = [standardized UTF8String];
-	string strOutput = outputPathUTF8;
+	string strPayloadFolder = standardized.UTF8String ?: "";
+	string strOutput = outputPath.UTF8String ?: "";
 
 	atimer.Reset();
 	ZLog::PrintV(">>> Archiving: \t%s ... \n", ZUtil::GetBaseName(strOutput.c_str()));
