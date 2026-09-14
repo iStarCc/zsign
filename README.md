@@ -48,7 +48,13 @@ export ZSIGN_LANG=zh
 
 ## Backend 集成
 
-编译后将 `bin/zsign` 复制到 `Backend/storage/cmd/Linux/zsign` 或 `MacOS/zsign`，或使用 `Backend/scripts/build_zsign.sh`。
+zsign **不在 Docker 镜像内编译**。本地或 CI 在构建镜像前单独执行：
+
+```bash
+./scripts/build-zsign-binaries.sh   # 或 Backend/scripts/build_zsign.sh
+```
+
+产物写入 `Backend/storage/cmd/{Linux,MacOS}/zsign`，随 `COPY Backend/` 打入镜像。二进制在 `.gitignore` 中，发布 CI 会在 `docker build` 前自动编译 Linux 版。
 
 ---
 **分支**: master-ipax  

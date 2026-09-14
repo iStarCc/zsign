@@ -63,6 +63,9 @@ bool ZMachO::OpenFile(const char* szPath)
 
 	m_sSize = 0;
 	m_pBase = (uint8_t*)ZFile::MapFile(szPath, 0, 0, &m_sSize, false);
+	if (NULL == m_pBase) {
+		m_pBase = (uint8_t*)ZFile::MapFile(szPath, 0, 0, &m_sSize, true);
+	}
 	if (NULL != m_pBase) {
 		uint32_t magic = *((uint32_t*)m_pBase);
 		if (FAT_CIGAM == magic || FAT_MAGIC == magic) {
@@ -73,9 +76,12 @@ bool ZMachO::OpenFile(const char* szPath)
 				uint8_t* pArchBase = m_pBase + ((FAT_MAGIC == magic) ? pFatArch->offset : LE(pFatArch->offset));
 				uint32_t uArchLength = (FAT_MAGIC == magic) ? pFatArch->size : LE(pFatArch->size);
 				if (!NewArchO(pArchBase, uArchLength)) {
-					ZLog::ErrorV(">>> Invalid arch file in fat mach-o file!\n");
-					return false;
+					continue;
 				}
+			}
+			if (m_arrArchOes.empty()) {
+				ZLog::ErrorV(">>> Invalid arch file in fat mach-o file!\n");
+				return false;
 			}
 		} else if (MH_MAGIC == magic || MH_CIGAM == magic || MH_MAGIC_64 == magic || MH_CIGAM_64 == magic) {
 			if (!NewArchO(m_pBase, (uint32_t)m_sSize)) {

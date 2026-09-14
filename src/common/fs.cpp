@@ -54,7 +54,9 @@ void* ZFile::MapFile(const char* path, size_t offset, size_t size, size_t* psize
 			*psize = size;
 		}
 
-		base = mmap(NULL, size, ro ? PROT_READ : PROT_READ | PROT_WRITE, MAP_SHARED, fd, offset);
+		int prot = ro ? PROT_READ : (PROT_READ | PROT_WRITE);
+		int flags = ro ? MAP_PRIVATE : MAP_SHARED;
+		base = mmap(NULL, size, prot, flags, fd, offset);
 		if (MAP_FAILED == base) {
 			base = NULL;
 		}

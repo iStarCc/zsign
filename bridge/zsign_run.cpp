@@ -101,12 +101,12 @@ static const char* kHelpText =
 	"-v, --version\t\tShows version.\n"
 	"-h, --help\t\tShows help (this message).\n";
 
-static string OptStr(const char* _Nullable value)
+static string OptStr(const char* value)
 {
 	return value ? string(value) : string();
 }
 
-static vector<string> OptStrArray(const char* _Nullable const* _Nullable values, size_t count)
+static vector<string> OptStrArray(const char* const* values, size_t count)
 {
 	vector<string> result;
 	if (!values) {
