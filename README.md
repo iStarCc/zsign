@@ -54,7 +54,7 @@ zsign **不在 Docker 镜像内编译**。本地或 CI 在构建镜像前单独�
 ./scripts/build-zsign-binaries.sh   # 或 Backend/scripts/build_zsign.sh
 ```
 
-产物写入 `Backend/storage/cmd/{Linux,MacOS}/zsign`，随 `COPY Backend/` 打入镜像。二进制在 `.gitignore` 中，发布 CI 会在 `docker build` 前自动编译 Linux 版。
+产物写入 `Backend/storage/cmd/{Linux,MacOS}/zsign` 并提交到 IPAX 仓库，随 `COPY Backend/` 打入镜像。升级 zsign 时本地运行上述脚本后提交新二进制。
 
 ---
 **分支**: master-ipax  
