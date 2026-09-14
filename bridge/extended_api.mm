@@ -108,7 +108,7 @@ static bool ValidatePayloadFolder(const char* payloadFolderUTF8, NSString** stan
 		}
 
 		if (standardizedOut) {
-			*standardizedOut = standardized;
+			*standardizedOut = [standardized copy];
 		}
 		return true;
 	}
